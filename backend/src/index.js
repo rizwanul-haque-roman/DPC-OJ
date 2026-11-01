@@ -28,6 +28,7 @@ app.use('/api/admin/dashboard', require('./routes/adminDashboard'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/learn',    require('./routes/learn'));
 app.use('/api/admin', require('./routes/adminLearning'));
+app.use('/api/admin', require('./routes/adminLearningPractice'));
 
 // 404 handler (after all routes)
 app.use((req, res) => {

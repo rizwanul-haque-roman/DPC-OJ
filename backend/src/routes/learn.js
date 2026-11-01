@@ -367,4 +367,69 @@ router.get("/subjects/:subjectId/progress", async (req, res) => {
   }
 });
 
+// Practice problems for an accessible lesson.
+// Only public problems are returned.
+// Solved means an Accepted non-contest submission by the current user.
+router.get(
+  "/topics/:topicId/practice-problems",
+  optionalLearningAuth,
+  requireUnlockedTopic,
+  async (req, res) => {
+    try {
+      const topicId = req.learningTopic.id;
+      const userId = req.user?.userId ?? null;
+
+      const [rows] = await db.execute(
+        `
+          SELECT
+            p.id,
+            p.title,
+            p.difficulty,
+            ltp.order_index,
+            EXISTS (
+              SELECT 1
+              FROM submissions AS submission
+              WHERE submission.problem_id = p.id
+                AND submission.user_id = ?
+                AND submission.verdict = 'Accepted'
+                AND submission.contest_id IS NULL
+            ) AS solved
+          FROM learning_topic_problems AS ltp
+          INNER JOIN problems AS p
+            ON p.id = ltp.problem_id
+          WHERE ltp.topic_id = ?
+            AND p.is_public = 1
+          ORDER BY ltp.order_index ASC, p.id ASC
+        `,
+        [userId, topicId],
+      );
+
+      const problems = rows.map((row) => ({
+        ...row,
+        solved:
+          userId === null
+            ? null
+            : Boolean(Number(row.solved)),
+      }));
+
+      return res.json({
+        topic_id: topicId,
+        authenticated: userId !== null,
+        total: problems.length,
+        solved_count:
+          userId === null
+            ? null
+            : problems.filter((problem) => problem.solved).length,
+        problems,
+      });
+    } catch (error) {
+      console.error("Student lesson practice error:", error);
+
+      return res.status(500).json({
+        error: "Unable to load lesson practice problems.",
+      });
+    }
+  },
+);
+
 module.exports = router;

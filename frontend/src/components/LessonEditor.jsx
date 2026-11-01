@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Eye, FileText, RefreshCw, Save, X } from "lucide-react";
 import api from "../api/axios";
 import LessonMarkdown from "./LessonMarkdown";
+import LessonPracticeManager from "./LessonPracticeManager";
 
 const inputClass =
   "w-full rounded-xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-cyan-400/50 focus:ring-4 focus:ring-cyan-400/10";
@@ -29,12 +30,14 @@ export default function LessonEditor({
   const [baseline, setBaseline] = useState(emptyForm);
   const [loading, setLoading] = useState(editing);
   const [saving, setSaving] = useState(false);
+  const [practiceBusy, setPracticeBusy] = useState(false);
   const [loaded, setLoaded] = useState(!editing);
   const [error, setError] = useState("");
   const [tab, setTab] = useState("write");
   const [reloadKey, setReloadKey] = useState(0);
 
   const savingLock = useRef(false);
+  const practiceBusyRef = useRef(false);
 
   const dirty =
     form.title !== baseline.title ||
@@ -43,6 +46,7 @@ export default function LessonEditor({
 
   const contentBytes = bytes(form.content);
   const starterBytes = bytes(form.starter_code);
+  const editorBusy = saving || practiceBusy;
 
   useEffect(() => {
     const controller = new AbortController();
@@ -102,7 +106,7 @@ export default function LessonEditor({
   }, [editing, topicId, subject.id, reloadKey]);
 
   useEffect(() => {
-    if (!dirty) return;
+    if (!dirty && !editorBusy) return;
 
     function warnBeforeUnload(event) {
       event.preventDefault();
@@ -114,7 +118,7 @@ export default function LessonEditor({
     return () => {
       window.removeEventListener("beforeunload", warnBeforeUnload);
     };
-  }, [dirty]);
+  }, [dirty, editorBusy]);
 
   function updateField(event) {
     const { name, value } = event.target;
@@ -125,12 +129,19 @@ export default function LessonEditor({
     }));
   }
 
+  function handlePracticeBusyChange(value) {
+    practiceBusyRef.current = value;
+    setPracticeBusy(value);
+  }
+
   function cancel() {
-    if (savingLock.current) return;
+    if (savingLock.current || practiceBusyRef.current) return;
 
     if (
       dirty &&
-      !window.confirm("Discard your unsaved lesson changes?")
+      !window.confirm(
+        "Discard your unsaved lesson content changes?\n\nPractice-problem changes that were already saved will remain.",
+      )
     ) {
       return;
     }
@@ -141,7 +152,13 @@ export default function LessonEditor({
   async function saveLesson(event) {
     event.preventDefault();
 
-    if (savingLock.current || !loaded) return;
+    if (
+      savingLock.current ||
+      practiceBusyRef.current ||
+      !loaded
+    ) {
+      return;
+    }
 
     setError("");
 
@@ -230,7 +247,7 @@ export default function LessonEditor({
         <button
           type="button"
           onClick={cancel}
-          disabled={saving}
+          disabled={editorBusy}
           aria-label="Close lesson editor"
           className="rounded-xl p-2 text-slate-400 transition hover:bg-white/5 hover:text-white disabled:opacity-40"
         >
@@ -262,7 +279,7 @@ export default function LessonEditor({
         </div>
       ) : (
         <form onSubmit={saveLesson}>
-          <fieldset disabled={saving} className="min-w-0">
+          <fieldset disabled={editorBusy} className="min-w-0">
             <div className="p-5 sm:p-6">
               <label
                 htmlFor="lesson-title"
@@ -413,17 +430,20 @@ export default function LessonEditor({
               <p className="text-xs text-slate-500">
                 {saving
                   ? "Saving lesson..."
-                  : dirty
-                    ? "You have unsaved changes."
-                    : editing
-                      ? "Editing does not change publication status."
-                      : "New lessons are saved as drafts."}
+                  : practiceBusy
+                    ? "Updating practice problems..."
+                    : dirty
+                      ? "You have unsaved lesson content changes."
+                      : editing
+                        ? "Editing does not change publication status."
+                        : "New lessons are saved as drafts."}
               </p>
 
               <div className="flex gap-3">
                 <button
                   type="button"
                   onClick={cancel}
+                  disabled={editorBusy}
                   className={`${buttonClass} border-white/10 bg-white/5 text-slate-300 hover:bg-white/10`}
                 >
                   Cancel
@@ -431,7 +451,7 @@ export default function LessonEditor({
 
                 <button
                   type="submit"
-                  disabled={saving || (editing && !dirty)}
+                  disabled={editorBusy || (editing && !dirty)}
                   className={`${buttonClass} border-cyan-400/20 bg-cyan-400/10 text-cyan-200 hover:bg-cyan-400/20`}
                 >
                   {saving ? (
@@ -451,6 +471,28 @@ export default function LessonEditor({
           </fieldset>
         </form>
       )}
+
+      {!loading &&
+        loaded &&
+        (editing ? (
+          <LessonPracticeManager
+            key={topicId}
+            topicId={topicId}
+            disabled={saving}
+            onBusyChange={handlePracticeBusyChange}
+          />
+        ) : (
+          <div className="border-t border-white/10 px-5 py-5 sm:px-6">
+            <h3 className="text-base font-semibold text-white">
+              Practice problems
+            </h3>
+
+            <p className="mt-2 text-sm leading-6 text-slate-400">
+              Create this draft first, then reopen it using Edit to
+              attach practice problems.
+            </p>
+          </div>
+        ))}
     </section>
   );
 }

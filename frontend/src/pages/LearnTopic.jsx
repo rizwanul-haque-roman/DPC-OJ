@@ -3,6 +3,7 @@ import { Link, useParams, useSearchParams } from "react-router-dom";
 import Editor from "@monaco-editor/react";
 import api from "../api/axios";
 import LessonMarkdown from "../components/LessonMarkdown";
+import LessonPracticeProblems from "../components/LessonPracticeProblems";
 
 const DEFAULT_CODE = {
   c: `#include <stdio.h>
@@ -762,6 +763,10 @@ function LearnTopic() {
               <div className="px-6 py-5">
                 <div className="px-6 py-5">
                   <LessonMarkdown content={topic?.content || ""} />
+                  <LessonPracticeProblems
+                    key={topicId}
+                    topicId={topicId}
+                  />
                 </div>
               </div>
             )}

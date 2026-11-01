@@ -77,10 +77,10 @@ function App() {
   };
 
   return (
-    <div className="flex h-screen min-h-0 flex-col overflow-hidden bg-[radial-gradient(circle_at_top_left,rgba(61,217,255,0.16),transparent_28%),radial-gradient(circle_at_top_right,rgba(109,124,255,0.18),transparent_32%),linear-gradient(135deg,#070b17,#0b1020)] text-slate-100 md:flex-row">
+    <div className="app-shell flex flex-col bg-[radial-gradient(circle_at_top_left,rgba(61,217,255,0.16),transparent_28%),radial-gradient(circle_at_top_right,rgba(109,124,255,0.18),transparent_32%),linear-gradient(135deg,#070b17,#0b1020)] text-slate-100 md:flex-row">
       <Navbar />
 
-      <main className="min-h-0 min-w-0 flex-1 overflow-y-auto p-4 md:p-6">
+      <main className="app-main flex-1 p-4 md:p-6">
         <div className="mb-6 flex flex-col gap-4 rounded-[22px] border border-white/10 bg-slate-900/50 p-5 shadow-2xl backdrop-blur-xl lg:flex-row lg:items-start lg:justify-between">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-white">
