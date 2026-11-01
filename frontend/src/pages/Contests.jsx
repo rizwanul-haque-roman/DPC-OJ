@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import api from "../api/axios";
 import { Link } from "react-router-dom";
+import api from "../api/axios";
 
 const FILTERS = [
   { value: "all", label: "All Contests" },
@@ -8,6 +8,9 @@ const FILTERS = [
   { value: "upcoming", label: "Upcoming" },
   { value: "ended", label: "Finished" },
 ];
+
+const ROW_COLUMNS =
+  "xl:grid-cols-[minmax(0,1fr)_150px_180px_130px_120px]";
 
 function getStatus(contest, now) {
   const start = new Date(contest.start_time).getTime();
@@ -23,26 +26,31 @@ function getStatus(contest, now) {
 
   if (now < start) return "upcoming";
   if (now < end) return "live";
-
   return "ended";
 }
 
-function formatDate(value) {
-  if (!value) return "Not scheduled";
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return "Invalid date";
+function formatDateParts(value) {
+  if (!value) {
+    return { date: "Not scheduled", time: "" };
   }
 
-  return date.toLocaleString([], {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  const parsed = new Date(value);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return { date: "Invalid date", time: "" };
+  }
+
+  return {
+    date: parsed.toLocaleDateString([], {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    }),
+    time: parsed.toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    }),
+  };
 }
 
 function formatDuration(startValue, endValue) {
@@ -61,14 +69,8 @@ function formatDuration(startValue, endValue) {
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
 
-  if (hours === 0) {
-    return `${minutes} min`;
-  }
-
-  if (minutes === 0) {
-    return `${hours} hr`;
-  }
-
+  if (hours === 0) return `${minutes} min`;
+  if (minutes === 0) return `${hours} hr`;
   return `${hours} hr ${minutes} min`;
 }
 
@@ -100,136 +102,118 @@ function StatusBadge({ status }) {
 
   return (
     <span
-      className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold ${badge.className}`}
+      className={`inline-flex max-w-full items-center gap-2 rounded-full border px-2.5 py-1 text-xs font-semibold ${badge.className}`}
     >
       {status === "live" && (
         <span
           aria-hidden="true"
-          className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-300"
+          className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-emerald-300"
         />
       )}
-
       {badge.label}
     </span>
   );
 }
 
-function ContestCard({ contest, now }) {
+function ContestRow({ contest, now }) {
   const status = getStatus(contest, now);
+  const start = formatDateParts(contest.start_time);
+  const title = contest.title || "Untitled contest";
+  const description = contest.description?.trim();
+
+  const metadata = [
+    `#${contest.id}`,
+    ...(contest.problem_count !== undefined &&
+    contest.problem_count !== null
+      ? [`${Number(contest.problem_count)} problems`]
+      : []),
+    ...(contest.participant_count !== undefined &&
+    contest.participant_count !== null
+      ? [`${Number(contest.participant_count)} registered`]
+      : []),
+  ];
 
   return (
-    <article className="flex h-full flex-col rounded-3xl border border-white/10 bg-slate-900/60 p-6 shadow-lg transition hover:border-cyan-400/30 hover:bg-slate-900/80">
-      <div className="flex items-center justify-between gap-3">
-        <StatusBadge status={status} />
-
-        <span className="font-mono text-xs text-slate-500">
-          #{contest.id}
-        </span>
-      </div>
-
-      <h3 className="mt-5 break-words text-xl font-bold text-white">
-        {contest.title || "Untitled contest"}
-      </h3>
-
-      <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-7 text-slate-400">
-        {contest.description || "No description has been added yet."}
-      </p>
-
-      <dl className="mt-6 space-y-4">
-        <div className="flex items-start justify-between gap-4">
-          <dt className="shrink-0 text-sm text-slate-500">
-            Starts
-          </dt>
-
-          <dd className="text-right text-sm text-slate-200">
-            {formatDate(contest.start_time)}
-          </dd>
-        </div>
-
-        <div className="flex items-start justify-between gap-4">
-          <dt className="shrink-0 text-sm text-slate-500">
-            Ends
-          </dt>
-
-          <dd className="text-right text-sm text-slate-200">
-            {formatDate(contest.end_time)}
-          </dd>
-        </div>
-
-        <div className="flex items-start justify-between gap-4">
-          <dt className="shrink-0 text-sm text-slate-500">
-            Duration
-          </dt>
-
-          <dd className="text-right text-sm text-slate-200">
-            {formatDuration(
-              contest.start_time,
-              contest.end_time,
-            )}
-          </dd>
-        </div>
-
-        {contest.problem_count !== undefined &&
-          contest.problem_count !== null && (
-            <div className="flex items-start justify-between gap-4">
-              <dt className="text-sm text-slate-500">
-                Problems
-              </dt>
-
-              <dd className="text-sm text-slate-200">
-                {Number(contest.problem_count)}
-              </dd>
-            </div>
-          )}
-
-        {contest.participant_count !== undefined &&
-          contest.participant_count !== null && (
-            <div className="flex items-start justify-between gap-4">
-              <dt className="text-sm text-slate-500">
-                Registered
-              </dt>
-
-              <dd className="text-sm text-slate-200">
-                {Number(contest.participant_count)}
-              </dd>
-            </div>
-          )}
-      </dl>
-
-      <div className="mt-auto pt-6">
-        <div className="border-t border-white/10 pt-4">
-          <p className="text-xs leading-6 text-slate-500">
-            {status === "live" && "This contest is currently running."}
-
-            {status === "upcoming" &&
-              "This contest has not started yet."}
-
-            {status === "ended" && "This contest has finished."}
-
-            {status === "invalid" &&
-              "The contest schedule needs to be checked."}
-          </p>
-
+    <article
+      className={`grid grid-cols-1 items-center gap-4 rounded-2xl border border-white/10 bg-slate-900/60 px-5 py-4 transition hover:border-cyan-400/30 hover:bg-slate-900/80 ${ROW_COLUMNS}`}
+    >
+      <div className="min-w-0">
+        <h3 className="text-base font-bold text-white">
           <Link
             to={`/contests/${contest.id}`}
-            className="mt-4 inline-flex items-center justify-center rounded-xl border border-cyan-400/20 bg-cyan-400/10 px-4 py-2.5 text-sm font-semibold text-cyan-200 transition hover:bg-cyan-400/20"
+            className="break-words transition hover:text-cyan-200 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-cyan-300"
           >
-            View Contest →
+            {title}
           </Link>
+        </h3>
+
+        <div className="mt-1 flex min-w-0 items-center gap-2 text-xs text-slate-500">
+          <span className="shrink-0">
+            {metadata.join(" · ")}
+          </span>
+
+          {description && (
+            <>
+              <span aria-hidden="true">·</span>
+              <span className="truncate" title={description}>
+                {description}
+              </span>
+            </>
+          )}
         </div>
+      </div>
+
+      <div>
+        <span className="mb-1 block text-xs text-slate-500 xl:hidden">
+          Status
+        </span>
+        <StatusBadge status={status} />
+      </div>
+
+      <div>
+        <span className="mb-1 block text-xs text-slate-500 xl:hidden">
+          Starts
+        </span>
+        <p className="text-sm font-medium text-slate-200">
+          {start.date}
+        </p>
+        {start.time && (
+          <p className="mt-1 text-xs text-slate-500">
+            {start.time}
+          </p>
+        )}
+      </div>
+
+      <div>
+        <span className="mb-1 block text-xs text-slate-500 xl:hidden">
+          Duration
+        </span>
+        <p className="text-sm text-slate-300">
+          {formatDuration(contest.start_time, contest.end_time)}
+        </p>
+      </div>
+
+      <div className="xl:justify-self-end">
+        <Link
+          to={`/contests/${contest.id}`}
+          aria-label={`View contest: ${title}`}
+          className="inline-flex items-center justify-center whitespace-nowrap rounded-xl border border-cyan-400/20 bg-cyan-400/10 px-4 py-2 text-sm font-semibold text-cyan-200 transition hover:border-cyan-400/40 hover:bg-cyan-400/20 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-cyan-300"
+        >
+          View <span aria-hidden="true" className="ml-2">→</span>
+        </Link>
       </div>
     </article>
   );
 }
 
-function Contests() {
+export default function Contests() {
   const [contests, setContests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [now, setNow] = useState(() => Date.now());
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -269,70 +253,16 @@ function Contests() {
     }
 
     loadContests();
-
-    return () => {
-      controller.abort();
-    };
-  }, []);
+    return () => controller.abort();
+  }, [refreshKey]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
       setNow(Date.now());
     }, 1000);
 
-    return () => {
-      window.clearInterval(timer);
-    };
+    return () => window.clearInterval(timer);
   }, []);
-
-  const [refreshKey, setRefreshKey] = useState(0);
-
-  // Refreshes are separate from the initial load.
-  useEffect(() => {
-    if (refreshKey === 0) return;
-
-    const controller = new AbortController();
-
-    async function refreshContests() {
-      try {
-        setLoading(true);
-        setError("");
-
-        const response = await api.get("/contests", {
-          signal: controller.signal,
-        });
-
-        if (!Array.isArray(response.data)) {
-          throw new Error(
-            "The server returned an unexpected contest response.",
-          );
-        }
-
-        if (!controller.signal.aborted) {
-          setContests(response.data);
-          setNow(Date.now());
-        }
-      } catch (err) {
-        if (controller.signal.aborted) return;
-
-        setError(
-          err.response?.data?.error ||
-            err.message ||
-            "Unable to load contests. Please try again.",
-        );
-      } finally {
-        if (!controller.signal.aborted) {
-          setLoading(false);
-        }
-      }
-    }
-
-    refreshContests();
-
-    return () => {
-      controller.abort();
-    };
-  }, [refreshKey]);
 
   const counts = useMemo(() => {
     const result = {
@@ -344,10 +274,7 @@ function Contests() {
 
     for (const contest of contests) {
       const status = getStatus(contest, now);
-
-      if (status !== "invalid") {
-        result[status] += 1;
-      }
+      if (status !== "invalid") result[status] += 1;
     }
 
     return result;
@@ -372,14 +299,14 @@ function Contests() {
     });
   }, [contests, search, statusFilter, now]);
 
-  const refreshContests = () => {
+  function refreshContests() {
     setRefreshKey((value) => value + 1);
-  };
+  }
 
-  const clearFilters = () => {
+  function clearFilters() {
     setSearch("");
     setStatusFilter("all");
-  };
+  }
 
   return (
     <div className="space-y-6">
@@ -389,14 +316,12 @@ function Contests() {
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-300">
               DPC-OJ Competitions
             </p>
-
             <h2 className="mt-2 text-2xl font-bold text-white">
               Contests
             </h2>
-
             <p className="mt-2 text-sm leading-7 text-slate-400">
-              Explore upcoming competitions, live contests, and
-              completed events.
+              Explore upcoming competitions, live contests, and completed
+              events.
             </p>
           </div>
 
@@ -441,10 +366,7 @@ function Contests() {
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                   {stat.label}
                 </p>
-
-                <p
-                  className={`mt-2 text-3xl font-bold ${stat.color}`}
-                >
+                <p className={`mt-2 text-3xl font-bold ${stat.color}`}>
                   {stat.value}
                 </p>
               </div>
@@ -501,10 +423,7 @@ function Contests() {
             role="alert"
             className="mt-6 rounded-2xl border border-rose-400/20 bg-rose-400/10 p-5"
           >
-            <p className="text-sm text-rose-200">
-              {error}
-            </p>
-
+            <p className="text-sm text-rose-200">{error}</p>
             <button
               type="button"
               onClick={refreshContests}
@@ -520,10 +439,9 @@ function Contests() {
             <h3 className="text-lg font-semibold text-white">
               No contests available
             </h3>
-
             <p className="mt-2 text-sm text-slate-400">
-              Public contests will appear here once they are
-              created and published.
+              Public contests will appear here once they are created and
+              published.
             </p>
           </div>
         )}
@@ -536,11 +454,9 @@ function Contests() {
               <h3 className="text-lg font-semibold text-white">
                 No matching contests
               </h3>
-
               <p className="mt-2 text-sm text-slate-400">
                 Try a different search or status filter.
               </p>
-
               <button
                 type="button"
                 onClick={clearFilters}
@@ -554,14 +470,24 @@ function Contests() {
         {!loading && !error && filteredContests.length > 0 && (
           <>
             <p className="mt-5 text-sm text-slate-400">
-              Showing {filteredContests.length} of{" "}
-              {contests.length} contest
+              Showing {filteredContests.length} of {contests.length} contest
               {contests.length === 1 ? "" : "s"}.
             </p>
 
-            <div className="mt-5 grid gap-5 md:grid-cols-2 2xl:grid-cols-3">
+            <div
+              aria-hidden="true"
+              className={`mt-5 hidden items-center gap-4 px-5 text-xs font-semibold uppercase tracking-wide text-slate-500 xl:grid ${ROW_COLUMNS}`}
+            >
+              <span>Contest</span>
+              <span>Status</span>
+              <span>Starts</span>
+              <span>Duration</span>
+              <span className="text-right">Action</span>
+            </div>
+
+            <div className="mt-3 space-y-3">
               {filteredContests.map((contest) => (
-                <ContestCard
+                <ContestRow
                   key={contest.id}
                   contest={contest}
                   now={now}
@@ -570,8 +496,7 @@ function Contests() {
             </div>
 
             <p className="mt-5 text-xs text-slate-500">
-              Dates and times are displayed in your browser’s
-              local timezone.
+              Dates and times are displayed in your browser’s local timezone.
             </p>
           </>
         )}
@@ -579,5 +504,3 @@ function Contests() {
     </div>
   );
 }
-
-export default Contests;

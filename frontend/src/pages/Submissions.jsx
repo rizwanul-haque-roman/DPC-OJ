@@ -61,12 +61,10 @@ function Submissions() {
   }, []);
 
   return (
-    <div className="rounded-3xl border border-white/10 bg-slate-900/60 p-5 shadow-2xl backdrop-blur-xl sm:p-7">
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex h-[calc(100dvh-180px)] min-h-0 flex-col overflow-hidden rounded-3xl border border-white/10 bg-slate-900/60 p-5 shadow-2xl backdrop-blur-xl sm:p-7">
+      <div className="mb-6 flex shrink-0 flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-white">
-            Submission History
-          </h2>
+          <h2 className="text-2xl font-bold text-white">Submission History</h2>
           <p className="mt-1 text-sm text-slate-400">
             View your previous attempts across all problems.
           </p>
@@ -106,17 +104,32 @@ function Submissions() {
           </Link>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-2xl border border-white/10 bg-[#020714]/50">
+        <div
+          className="min-h-0 flex-1 overflow-auto overscroll-contain rounded-2xl border border-white/10 bg-[#020714]/50"
+          tabIndex={0}
+          role="region"
+          aria-label="Submission history table"
+        >
           <table className="w-full min-w-[780px] text-left text-sm">
-            <thead className="border-b border-white/10 bg-white/[0.03] text-xs uppercase tracking-wide text-slate-400">
+            <thead>
               <tr>
-                <th className="px-4 py-3 font-medium">ID</th>
-                <th className="px-4 py-3 font-medium">Problem</th>
-                <th className="px-4 py-3 font-medium">Language</th>
-                <th className="px-4 py-3 font-medium">Verdict</th>
-                <th className="px-4 py-3 font-medium">Time</th>
-                <th className="px-4 py-3 font-medium">Memory</th>
-                <th className="px-4 py-3 font-medium">Submitted</th>
+                {[
+                  "ID",
+                  "Problem",
+                  "Language",
+                  "Verdict",
+                  "Time",
+                  "Memory",
+                  "Submitted",
+                ].map((heading) => (
+                  <th
+                    key={heading}
+                    scope="col"
+                    className="sticky top-0 z-20 bg-[#101827] px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-slate-400 shadow-[inset_0_-1px_0_rgba(255,255,255,0.1)]"
+                  >
+                    {heading}
+                  </th>
+                ))}
               </tr>
             </thead>
 
@@ -174,7 +187,7 @@ function Submissions() {
               ))}
             </tbody>
           </table>
-          </div>
+        </div>
       )}
     </div>
   );

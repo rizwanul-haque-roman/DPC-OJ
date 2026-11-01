@@ -1,24 +1,44 @@
 const express = require("express");
 const router = express.Router();
 const db = require("../db");
+const { requireAuth } = require("../middleware/auth");
 
-// GET all public problems, optionally filtered by subject ID.
-// Example: GET /api/problems?subject_id=1
-router.get("/", async (req, res) => {
+function optionalAuth(req, res, next) {
+  if (req.headers.authorization !== undefined) {
+    return requireAuth(req, res, next);
+  }
+
+  return next();
+}
+
+// Public problem list, with personal solved status when authenticated.
+router.get("/", optionalAuth, async (req, res) => {
   const { subject_id } = req.query;
+  const userId = req.user?.userId ?? null;
+
+  // This response can contain user-specific solved status.
+  res.set("Cache-Control", "private, no-store");
+  res.vary("Authorization");
 
   try {
     let query = `
       SELECT
         p.*,
-        s.name AS subject_name
+        s.name AS subject_name,
+        EXISTS (
+          SELECT 1
+          FROM submissions AS sub
+          WHERE sub.problem_id = p.id
+            AND sub.user_id = ?
+            AND sub.verdict = 'Accepted'
+        ) AS is_solved
       FROM problems AS p
       LEFT JOIN subjects AS s
         ON p.subject_id = s.id
       WHERE p.is_public = true
     `;
 
-    const params = [];
+    const params = [userId];
 
     if (subject_id) {
       query += " AND p.subject_id = ?";
@@ -29,46 +49,48 @@ router.get("/", async (req, res) => {
 
     const [rows] = await db.execute(query, params);
 
-    res.json(rows);
+    return res.json(
+      rows.map((row) => ({
+        ...row,
+        is_solved: Number(row.is_solved) === 1,
+      })),
+    );
   } catch (err) {
     console.error("Problems list error:", err);
 
-    res.status(500).json({
+    return res.status(500).json({
       error: "Unable to load problems.",
     });
   }
 });
 
-// GET all subjects.
-// This route MUST appear before "/:id".
+// Must appear before "/:id".
 router.get("/meta/subjects", async (req, res) => {
   try {
-    const [rows] = await db.execute(
-      `
-        SELECT
-          id,
-          name,
-          semester_no
-        FROM subjects
-        ORDER BY semester_no ASC, id ASC
-      `,
-    );
+    const [rows] = await db.execute(`
+      SELECT
+        id,
+        name,
+        semester_no
+      FROM subjects
+      ORDER BY semester_no ASC, id ASC
+    `);
 
-    res.json(rows);
+    return res.json(rows);
   } catch (err) {
     console.error("Subjects list error:", err);
 
-    res.status(500).json({
+    return res.status(500).json({
       error: "Unable to load subjects.",
     });
   }
 });
 
-// GET one public problem by ID, including only visible/sample test cases.
+// Public problem details, including sample test cases only.
 router.get("/:id", async (req, res) => {
   const problemId = Number(req.params.id);
 
-  if (!Number.isInteger(problemId) || problemId <= 0) {
+  if (!Number.isSafeInteger(problemId) || problemId <= 0) {
     return res.status(400).json({
       error: "Invalid problem ID.",
     });
@@ -83,7 +105,8 @@ router.get("/:id", async (req, res) => {
         FROM problems AS p
         LEFT JOIN subjects AS s
           ON p.subject_id = s.id
-        WHERE p.id = ? AND p.is_public = true
+        WHERE p.id = ?
+          AND p.is_public = true
         LIMIT 1
       `,
       [problemId],
@@ -102,32 +125,25 @@ router.get("/:id", async (req, res) => {
           input,
           expected_output
         FROM test_cases
-        WHERE problem_id = ? AND is_sample = true
+        WHERE problem_id = ?
+          AND is_sample = true
         ORDER BY id ASC
       `,
       [problemId],
     );
 
-    // Your frontend currently reads:
-    // problem.sample_input
-    // problem.sample_output
-    //
-    // These fields are created from the first public sample test case.
     const firstSample = samples[0] || {};
 
-    res.json({
+    return res.json({
       ...problemRows[0],
-
       sample_input: firstSample.input || "",
       sample_output: firstSample.expected_output || "",
-
-      // Kept for future support of multiple samples.
       sample_tests: samples,
     });
   } catch (err) {
     console.error("Problem details error:", err);
 
-    res.status(500).json({
+    return res.status(500).json({
       error: "Unable to load problem details.",
     });
   }

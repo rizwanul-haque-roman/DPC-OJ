@@ -657,28 +657,54 @@ router.delete("/problems/:id", async (req, res) => {
       [problemId],
     );
 
-    const hasSubmissions = submissionRows.length > 0;
-    const hasContestHistory = contestRows.length > 0;
+    const [learningRows] = await connection.execute(
+    `
+      SELECT topic_id
+      FROM learning_topic_problems
+      WHERE problem_id = ?
+      LIMIT 1
+      FOR UPDATE
+    `,
+    [problemId],
+  );
 
-    if (hasSubmissions || hasContestHistory) {
-      await connection.rollback();
+  const hasSubmissions = submissionRows.length > 0;
+  const hasContestHistory = contestRows.length > 0;
+  const hasLearningLinks = learningRows.length > 0;
 
-      const reasons = [];
+  if (hasSubmissions || hasContestHistory || hasLearningLinks) {
+    await connection.rollback();
 
-      if (hasSubmissions) {
-        reasons.push("it has submissions");
-      }
+    const reasons = [];
 
-      if (hasContestHistory) {
-        reasons.push("it has contest history");
-      }
-
-      return res.status(409).json({
-        error: `Cannot delete this problem because ${reasons.join(" and ")}.`,
-        has_submissions: hasSubmissions,
-        has_contest_history: hasContestHistory,
-      });
+    if (hasSubmissions) {
+      reasons.push("it has submissions");
     }
+
+    if (hasContestHistory) {
+      reasons.push("it has contest history");
+    }
+
+    if (hasLearningLinks) {
+      reasons.push("it is attached to learning lessons");
+    }
+
+    const reasonText =
+      reasons.length <= 2
+        ? reasons.join(" and ")
+        : `${reasons.slice(0, -1).join(", ")}, and ${reasons[reasons.length - 1]}`;
+
+    const guidance = hasLearningLinks
+      ? " Detach it from all lessons first. Existing submissions or contest history will still prevent deletion."
+      : "";
+
+    return res.status(409).json({
+      error: `Cannot delete this problem because ${reasonText}.${guidance}`,
+      has_submissions: hasSubmissions,
+      has_contest_history: hasContestHistory,
+      has_learning_links: hasLearningLinks,
+    });
+  }
 
     const problem = problemRows[0];
 

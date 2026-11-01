@@ -52,8 +52,7 @@ function Problems() {
         difficultyFilter === "all" || difficulty === difficultyFilter;
 
       const matchesSubject =
-        subjectFilter === "all" ||
-        subject === subjectFilter.toLowerCase();
+        subjectFilter === "all" || subject === subjectFilter.toLowerCase();
 
       return matchesSearch && matchesDifficulty && matchesSubject;
     });
@@ -92,7 +91,7 @@ function Problems() {
   };
 
   return (
-    <div className="flex h-[calc(100vh-150px)] min-h-0 flex-col gap-6 overflow-hidden">
+    <div className="flex h-[calc(100dvh-180px)] min-h-0 flex-col gap-6 overflow-hidden">
       {/* Fixed summary cards */}
       <section className="shrink-0 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <div className="rounded-3xl border border-white/10 bg-slate-900/50 p-5 shadow-2xl backdrop-blur-xl">
@@ -135,12 +134,8 @@ function Problems() {
           <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
             Hard
           </p>
-          <h3 className="mt-3 text-3xl font-bold text-rose-300">
-            {hardCount}
-          </h3>
-          <p className="mt-2 text-sm text-slate-400">
-            Advanced challenge mode
-          </p>
+          <h3 className="mt-3 text-3xl font-bold text-rose-300">{hardCount}</h3>
+          <p className="mt-2 text-sm text-slate-400">Advanced challenge mode</p>
         </div>
       </section>
 
@@ -228,9 +223,7 @@ function Problems() {
                     <th className="px-4 py-3 font-medium">Title</th>
                     <th className="px-4 py-3 font-medium">Difficulty</th>
                     <th className="px-4 py-3 font-medium">Subject</th>
-                    <th className="px-4 py-3 text-right font-medium">
-                      Action
-                    </th>
+                    <th className="px-4 py-3 text-right font-medium">Action</th>
                   </tr>
                 </thead>
 
@@ -245,12 +238,21 @@ function Problems() {
                       </td>
 
                       <td className="px-4 py-3">
-                        <Link
-                          to={`/problems/${problem.id}`}
-                          className="font-semibold text-white transition hover:text-cyan-300"
-                        >
-                          {problem.title}
-                        </Link>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Link
+                            to={`/problems/${problem.id}`}
+                            className="font-semibold text-white transition hover:text-cyan-300"
+                          >
+                            {problem.title}
+                          </Link>
+
+                          {Number(problem.is_solved) === 1 && (
+                            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2 py-0.5 text-xs font-semibold text-emerald-300">
+                              <span aria-hidden="true">✓</span>
+                              Solved
+                            </span>
+                          )}
+                        </div>
 
                         <p className="mt-1 text-xs text-slate-500">
                           Problem #{problem.id}
@@ -258,7 +260,9 @@ function Problems() {
                       </td>
 
                       <td className="px-4 py-3">
-                        <span className={getDifficultyClass(problem.difficulty)}>
+                        <span
+                          className={getDifficultyClass(problem.difficulty)}
+                        >
                           {problem.difficulty || "Unknown"}
                         </span>
                       </td>
@@ -286,9 +290,7 @@ function Problems() {
         {/* Right side panel */}
         <div className="min-h-0 space-y-6 overflow-y-auto pr-1 xl:col-span-1">
           <div className="rounded-3xl border border-white/10 bg-slate-900/50 p-5 shadow-2xl backdrop-blur-xl">
-            <h3 className="text-lg font-semibold text-white">
-              Filter Summary
-            </h3>
+            <h3 className="text-lg font-semibold text-white">Filter Summary</h3>
 
             <div className="mt-5 space-y-4">
               <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
