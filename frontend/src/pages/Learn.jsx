@@ -2,6 +2,9 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../api/axios";
 
+const COURSE_COLUMNS =
+  "xl:grid-cols-[minmax(0,1fr)_130px_100px_190px_180px]";
+
 function semesterLabel(number) {
   const semester = Number(number);
   const year = Math.ceil(semester / 2);
@@ -14,6 +17,207 @@ function semesterLabel(number) {
   };
 
   return `${yearLabels[year] || `${year}th`} year - Semester ${semester}`;
+}
+
+function CourseRow({ subject, onRetry }) {
+  const hasLessons =
+    !subject.isPlaceholder &&
+    subject.lessonCount > 0 &&
+    subject.startTopicId !== null &&
+    !subject.lessonError;
+
+  const isComplete =
+    hasLessons &&
+    subject.completedCount === subject.lessonCount;
+
+  const hasProgress =
+    hasLessons && subject.completedCount > 0;
+
+  const progressPercent = subject.lessonCount
+    ? Math.round(
+        (subject.completedCount / subject.lessonCount) * 100,
+      )
+    : 0;
+
+  const statusLabel = subject.lessonError
+    ? "Unavailable"
+    : !hasLessons
+      ? "Coming soon"
+      : isComplete
+        ? "Completed"
+        : "Ready";
+
+  const actionLabel = isComplete
+    ? "Review Lessons"
+    : hasProgress
+      ? "Continue Learning"
+      : "Start Learning";
+
+  const courseUrl = hasLessons
+    ? `/learn/topic/${subject.startTopicId}?subject=${encodeURIComponent(
+        subject.id,
+      )}`
+    : null;
+
+  return (
+    <article
+      className={[
+        "grid grid-cols-2 items-center gap-x-5 gap-y-4",
+        "rounded-2xl border border-white/10 bg-slate-900/60",
+        "px-5 py-4 transition",
+        hasLessons
+          ? "hover:border-cyan-400/30 hover:bg-slate-900/80"
+          : "",
+        COURSE_COLUMNS,
+      ].join(" ")}
+    >
+      {/* Course title and description */}
+      <div className="col-span-2 min-w-0 xl:col-span-1">
+        <h4 className="break-words text-base font-semibold text-white">
+          {courseUrl ? (
+            <Link
+              to={courseUrl}
+              className="transition hover:text-cyan-200 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-cyan-300"
+            >
+              {subject.name}
+            </Link>
+          ) : (
+            subject.name
+          )}
+        </h4>
+
+        {subject.description && (
+          <p
+            className="mt-1 truncate text-xs leading-5 text-slate-400"
+            title={subject.description}
+          >
+            {subject.description}
+          </p>
+        )}
+
+        {subject.lessonError && (
+          <p
+            role="alert"
+            className="mt-2 text-xs leading-5 text-rose-300"
+          >
+            {subject.lessonError}
+          </p>
+        )}
+      </div>
+
+      {/* Availability */}
+      <div className="min-w-0">
+        <span className="mb-1.5 block text-xs text-slate-500 xl:hidden">
+          Status
+        </span>
+
+        <span
+          className={[
+            "inline-flex items-center gap-1 rounded-full",
+            "border px-2.5 py-1 text-xs font-medium",
+            subject.lessonError
+              ? "border-rose-400/20 bg-rose-400/10 text-rose-200"
+              : !hasLessons
+                ? "border-amber-400/20 bg-amber-400/10 text-amber-200"
+                : "border-emerald-400/20 bg-emerald-400/10 text-emerald-200",
+          ].join(" ")}
+        >
+          {isComplete && <span aria-hidden="true">✓</span>}
+          {statusLabel}
+        </span>
+      </div>
+
+      {/* Language */}
+      <div className="min-w-0">
+        <span className="mb-1.5 block text-xs text-slate-500 xl:hidden">
+          Language
+        </span>
+
+        <span className="inline-flex max-w-full items-center rounded-full border border-indigo-400/20 bg-indigo-400/10 px-2.5 py-1 text-xs font-medium uppercase tracking-wide text-indigo-200">
+          {subject.language || "general"}
+        </span>
+      </div>
+
+      {/* Progress */}
+      <div className="col-span-2 min-w-0 sm:col-span-1 xl:col-span-1">
+        <span className="mb-1.5 block text-xs text-slate-500 xl:hidden">
+          Progress
+        </span>
+
+        {hasLessons ? (
+          <div>
+            <div className="mb-2 flex items-center justify-between gap-3 text-xs text-slate-400">
+              <span>
+                {subject.completedCount}/{subject.lessonCount} lessons
+              </span>
+              <span>{progressPercent}%</span>
+            </div>
+
+            <div
+              role="progressbar"
+              aria-label={`${subject.name} completion`}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={progressPercent}
+              aria-valuetext={`${subject.completedCount} of ${subject.lessonCount} lessons completed`}
+              className="h-1.5 overflow-hidden rounded-full bg-white/10"
+            >
+              <div
+                className={[
+                  "h-full rounded-full transition-all",
+                  isComplete
+                    ? "bg-emerald-400"
+                    : "bg-gradient-to-r from-indigo-500 to-cyan-400",
+                ].join(" ")}
+                style={{ width: `${progressPercent}%` }}
+              />
+            </div>
+          </div>
+        ) : (
+          <span className="text-sm text-slate-500">—</span>
+        )}
+      </div>
+
+      {/* Action */}
+      <div className="col-span-2 sm:col-span-1 sm:justify-self-end xl:col-span-1">
+        {subject.lessonError ? (
+          <button
+            type="button"
+            onClick={onRetry}
+            className="inline-flex w-full items-center justify-center rounded-xl border border-rose-400/20 bg-rose-400/10 px-4 py-2 text-xs font-semibold text-rose-200 transition hover:bg-rose-400/20 sm:w-auto"
+          >
+            Retry Lessons
+          </button>
+        ) : !hasLessons ? (
+          <button
+            type="button"
+            disabled
+            className="inline-flex w-full cursor-not-allowed items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-semibold text-slate-500 sm:w-auto"
+          >
+            Coming Soon
+          </button>
+        ) : (
+          <Link
+            to={courseUrl}
+            aria-label={`${actionLabel}: ${subject.name}`}
+            className={[
+              "inline-flex w-full items-center justify-center gap-2",
+              "whitespace-nowrap rounded-xl border px-4 py-2",
+              "text-xs font-semibold transition sm:w-auto",
+              "focus-visible:outline-2 focus-visible:outline-offset-4",
+              "focus-visible:outline-cyan-300",
+              isComplete
+                ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-200 hover:bg-emerald-400/20"
+                : "border-cyan-400/20 bg-cyan-400/10 text-cyan-200 hover:border-cyan-400/40 hover:bg-cyan-400/20",
+            ].join(" ")}
+          >
+            {actionLabel}
+            <span aria-hidden="true">→</span>
+          </Link>
+        )}
+      </div>
+    </article>
+  );
 }
 
 function Learn() {
@@ -147,8 +351,6 @@ function Learn() {
                 (lesson) => Number(lesson.completed) === 1,
               );
 
-              // The earliest incomplete lesson has no incomplete
-              // lessons before it. If all are complete, reopen lesson 1.
               const startLesson =
                 lessons.find(
                   (lesson) => Number(lesson.completed) !== 1,
@@ -214,6 +416,10 @@ function Learn() {
     setSubjectError("");
     setSubjectLoading(true);
     setSelectedSemester(semester);
+  };
+
+  const retrySubjects = () => {
+    setSubjectRetry((value) => value + 1);
   };
 
   if (loading) {
@@ -331,7 +537,7 @@ function Learn() {
             <button
               type="button"
               disabled={subjectLoading}
-              onClick={() => setSubjectRetry((value) => value + 1)}
+              onClick={retrySubjects}
               className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-300 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {subjectLoading ? "Loading..." : "Refresh"}
@@ -355,7 +561,7 @@ function Learn() {
 
             <button
               type="button"
-              onClick={() => setSubjectRetry((value) => value + 1)}
+              onClick={retrySubjects}
               className="mt-3 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold text-white transition hover:bg-white/10"
             >
               Retry
@@ -371,144 +577,33 @@ function Learn() {
             this semester.
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            {subjects.map((subject) => {
-              const hasLessons =
-                !subject.isPlaceholder &&
-                subject.lessonCount > 0 &&
-                subject.startTopicId !== null &&
-                !subject.lessonError;
+          <>
+            <div
+              aria-hidden="true"
+              className={[
+                "mb-3 hidden items-center gap-x-5 px-5",
+                "text-xs font-semibold uppercase tracking-wide",
+                "text-slate-500 xl:grid",
+                COURSE_COLUMNS,
+              ].join(" ")}
+            >
+              <span>Course</span>
+              <span>Status</span>
+              <span>Language</span>
+              <span>Progress</span>
+              <span className="text-right">Action</span>
+            </div>
 
-              const isComplete =
-                hasLessons &&
-                subject.completedCount === subject.lessonCount;
-
-              const hasProgress =
-                hasLessons && subject.completedCount > 0;
-
-              const progressPercent = subject.lessonCount
-                ? Math.round(
-                    (subject.completedCount / subject.lessonCount) *
-                      100,
-                  )
-                : 0;
-
-              const statusLabel = subject.lessonError
-                ? "Unavailable"
-                : !hasLessons
-                  ? "Coming soon"
-                  : isComplete
-                    ? "Completed"
-                    : "Ready";
-
-              const actionLabel = isComplete
-                ? "Review Learning Track"
-                : hasProgress
-                  ? "Continue Learning"
-                  : "Start Learning";
-
-              return (
-                <div
+            <div className="space-y-3">
+              {subjects.map((subject) => (
+                <CourseRow
                   key={subject.id}
-                  className="flex flex-col rounded-3xl border border-white/10 bg-white/5 p-6 shadow-lg"
-                >
-                  <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                    <span
-                      className={[
-                        "inline-flex items-center rounded-full px-3 py-1 text-xs font-medium",
-                        subject.lessonError
-                          ? "bg-rose-400/15 text-rose-200"
-                          : !hasLessons
-                            ? "bg-amber-400/15 text-amber-200"
-                            : "bg-emerald-400/15 text-emerald-200",
-                      ].join(" ")}
-                    >
-                      {statusLabel}
-                    </span>
-
-                    <span className="inline-flex items-center rounded-full bg-indigo-400/15 px-3 py-1 text-xs font-medium uppercase tracking-wide text-indigo-200">
-                      {subject.language || "general"}
-                    </span>
-                  </div>
-
-                  <h4 className="text-lg font-semibold text-white">
-                    {subject.name}
-                  </h4>
-
-                  {subject.description && (
-                    <p className="mt-2 text-sm leading-7 text-slate-400">
-                      {subject.description}
-                    </p>
-                  )}
-
-                  {hasLessons && (
-                    <div className="mt-5">
-                      <div className="mb-2 flex items-center justify-between gap-3 text-xs text-slate-400">
-                        <span>
-                          {subject.completedCount} of{" "}
-                          {subject.lessonCount} lessons completed
-                        </span>
-
-                        <span>{progressPercent}%</span>
-                      </div>
-
-                      <div
-                        role="progressbar"
-                        aria-label={`${subject.name} completion`}
-                        aria-valuemin={0}
-                        aria-valuemax={100}
-                        aria-valuenow={progressPercent}
-                        className="h-1.5 overflow-hidden rounded-full bg-white/10"
-                      >
-                        <div
-                          className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-cyan-400 transition-all"
-                          style={{ width: `${progressPercent}%` }}
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  {subject.lessonError && (
-                    <p
-                      role="alert"
-                      className="mt-4 text-xs leading-6 text-rose-300"
-                    >
-                      {subject.lessonError}
-                    </p>
-                  )}
-
-                  <div className="mt-auto pt-5">
-                    {subject.lessonError ? (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setSubjectRetry((value) => value + 1)
-                        }
-                        className="inline-flex w-full items-center justify-center rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-slate-300 transition hover:bg-white/10"
-                      >
-                        Retry Loading Lessons
-                      </button>
-                    ) : !hasLessons ? (
-                      <button
-                        type="button"
-                        disabled
-                        className="inline-flex w-full cursor-not-allowed items-center justify-center rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-slate-300 opacity-60"
-                      >
-                        Coming Soon
-                      </button>
-                    ) : (
-                      <Link
-                        to={`/learn/topic/${subject.startTopicId}?subject=${subject.id}`}
-                        className="inline-flex w-full items-center justify-center rounded-2xl bg-gradient-to-r from-indigo-500 to-cyan-400 px-4 py-3 text-sm font-semibold text-white shadow-lg transition hover:-translate-y-px hover:shadow-cyan-500/20"
-                      >
-                        {actionLabel}
-                      </Link>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                  subject={subject}
+                  onRetry={retrySubjects}
+                />
+              ))}
+            </div>
+          </>
         )}
       </section>
     </div>
