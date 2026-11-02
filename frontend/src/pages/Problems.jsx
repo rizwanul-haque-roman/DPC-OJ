@@ -1,174 +1,303 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../api/axios";
 
+const INPUT_CLASS =
+  "rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-sm text-slate-200 outline-none transition focus:border-cyan-400/60";
+
+const BUTTON_CLASS =
+  "rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-200 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40";
+
+function getDifficultyClass(difficulty) {
+  const value = String(difficulty || "").trim().toLowerCase();
+
+  const colors = {
+    easy: "border-emerald-400/20 bg-emerald-400/10 text-emerald-200",
+    medium: "border-amber-400/20 bg-amber-400/10 text-amber-200",
+    hard: "border-rose-400/20 bg-rose-400/10 text-rose-200",
+  };
+
+  return [
+    "inline-flex items-center rounded-full border",
+    "px-2.5 py-1 text-xs font-semibold",
+    colors[value] || "border-white/10 bg-white/5 text-slate-300",
+  ].join(" ");
+}
+
 function Problems() {
-  const [problems, setProblems] = useState([]);
+  const archiveRef = useRef(null);
+
+  const [result, setResult] = useState(null);
   const [subjects, setSubjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [subjectError, setSubjectError] = useState("");
 
   const [search, setSearch] = useState("");
-  const [difficultyFilter, setDifficultyFilter] = useState("all");
-  const [subjectFilter, setSubjectFilter] = useState("all");
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [subjectRetry, setSubjectRetry] = useState(0);
+  const [authRevision, setAuthRevision] = useState(0);
+
+  const [query, setQuery] = useState({
+    page: 1,
+    pageSize: 10,
+    difficulty: "all",
+    subjectId: "all",
+    q: "",
+  });
+
+  // Request search results after typing pauses.
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const nextSearch = search.trim();
+
+      setQuery((previous) =>
+        previous.q === nextSearch
+          ? previous
+          : {
+              ...previous,
+              q: nextSearch,
+              page: 1,
+            },
+      );
+    }, 350);
+
+    return () => window.clearTimeout(timer);
+  }, [search]);
 
   useEffect(() => {
-    const fetchProblemsAndSubjects = async () => {
-      try {
-        setLoading(true);
-        setError("");
-
-        const [problemsRes, subjectsRes] = await Promise.all([
-          api.get("/problems"),
-          api.get("/problems/meta/subjects"),
-        ]);
-
-        setProblems(problemsRes.data);
-        setSubjects(subjectsRes.data);
-      } catch (err) {
-        setError(err.response?.data?.error || "Failed to load problems");
-      } finally {
-        setLoading(false);
-      }
+    const updateAuth = () => {
+      setResult(null);
+      setAuthRevision((value) => value + 1);
     };
 
-    fetchProblemsAndSubjects();
+    window.addEventListener("authChanged", updateAuth);
+    window.addEventListener("storage", updateAuth);
+
+    return () => {
+      window.removeEventListener("authChanged", updateAuth);
+      window.removeEventListener("storage", updateAuth);
+    };
   }, []);
 
-  const filteredProblems = useMemo(() => {
-    return problems.filter((problem) => {
-      const title = (problem.title || "").toLowerCase();
-      const difficulty = (problem.difficulty || "").toLowerCase();
-      const subject = (problem.subject_name || "").toLowerCase();
-      const query = search.toLowerCase().trim();
+  useEffect(() => {
+    const controller = new AbortController();
 
-      const matchesSearch =
-        !query ||
-        title.includes(query) ||
-        difficulty.includes(query) ||
-        subject.includes(query);
+    async function loadSubjects() {
+      setSubjectError("");
 
-      const matchesDifficulty =
-        difficultyFilter === "all" || difficulty === difficultyFilter;
+      try {
+        const response = await api.get("/problems/meta/subjects", {
+          signal: controller.signal,
+        });
 
-      const matchesSubject =
-        subjectFilter === "all" || subject === subjectFilter.toLowerCase();
+        if (controller.signal.aborted) return;
 
-      return matchesSearch && matchesDifficulty && matchesSubject;
+        if (!Array.isArray(response.data)) {
+          throw new Error("Unexpected subject response.");
+        }
+
+        setSubjects(response.data);
+      } catch (err) {
+        if (controller.signal.aborted) return;
+
+        setSubjectError(
+          err.response?.data?.error ||
+            err.message ||
+            "Unable to load subjects.",
+        );
+      }
+    }
+
+    loadSubjects();
+
+    return () => controller.abort();
+  }, [subjectRetry]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    async function loadProblems() {
+      setLoading(true);
+      setError("");
+
+      try {
+        const response = await api.get("/problems", {
+          signal: controller.signal,
+          params: {
+            paginated: 1,
+            page: query.page,
+            page_size: query.pageSize,
+            difficulty: query.difficulty,
+            ...(query.subjectId !== "all"
+              ? { subject_id: query.subjectId }
+              : {}),
+            ...(query.q ? { q: query.q } : {}),
+          },
+        });
+
+        if (controller.signal.aborted) return;
+
+        if (
+          !Array.isArray(response.data?.items) ||
+          !response.data?.pagination ||
+          !response.data?.summary
+        ) {
+          throw new Error(
+            "Unexpected problem response. Check that the backend pagination update is installed.",
+          );
+        }
+
+        setResult(response.data);
+      } catch (err) {
+        if (controller.signal.aborted) return;
+
+        setError(
+          err.response?.data?.error ||
+            err.message ||
+            "Failed to load problems.",
+        );
+      } finally {
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
+      }
+    }
+
+    loadProblems();
+
+    return () => controller.abort();
+  }, [query, refreshKey, authRevision]);
+
+  function changeFilter(field, value) {
+    setQuery((previous) => ({
+      ...previous,
+      [field]: value,
+      page: 1,
+    }));
+  }
+
+  function changePage(page) {
+    setQuery((previous) => ({
+      ...previous,
+      page,
+    }));
+
+    requestAnimationFrame(() => {
+      archiveRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
     });
-  }, [problems, search, difficultyFilter, subjectFilter]);
+  }
 
-  const totalProblems = problems.length;
+  function clearFilters() {
+    setSearch("");
+    setQuery((previous) => ({
+      ...previous,
+      page: 1,
+      difficulty: "all",
+      subjectId: "all",
+      q: "",
+    }));
+  }
 
-  const easyCount = problems.filter(
-    (problem) => (problem.difficulty || "").toLowerCase() === "easy",
-  ).length;
+  const problems = result?.items || [];
+  const pagination = result?.pagination;
+  const summary = result?.summary;
 
-  const mediumCount = problems.filter(
-    (problem) => (problem.difficulty || "").toLowerCase() === "medium",
-  ).length;
+  const selectedSubject =
+    subjects.find(
+      (subject) => String(subject.id) === query.subjectId,
+    )?.name || "All";
 
-  const hardCount = problems.filter(
-    (problem) => (problem.difficulty || "").toLowerCase() === "hard",
-  ).length;
-
-  const getDifficultyClass = (difficulty) => {
-    const value = (difficulty || "").toLowerCase();
-
-    if (value === "easy") {
-      return "inline-flex items-center rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2.5 py-1 text-xs font-semibold text-emerald-200";
-    }
-
-    if (value === "medium") {
-      return "inline-flex items-center rounded-full border border-amber-400/20 bg-amber-400/10 px-2.5 py-1 text-xs font-semibold text-amber-200";
-    }
-
-    if (value === "hard") {
-      return "inline-flex items-center rounded-full border border-rose-400/20 bg-rose-400/10 px-2.5 py-1 text-xs font-semibold text-rose-200";
-    }
-
-    return "inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs font-semibold text-slate-300";
-  };
+  const searchPending = search.trim() !== query.q;
+  const resultsPending = loading || searchPending;
 
   return (
-    <div className="flex h-[calc(100dvh-180px)] min-h-0 flex-col gap-6 overflow-hidden">
-      {/* Fixed summary cards */}
-      <section className="shrink-0 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-3xl border border-white/10 bg-slate-900/50 p-5 shadow-2xl backdrop-blur-xl">
-          <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
-            Total Problems
-          </p>
-          <h3 className="mt-3 text-3xl font-bold text-white">
-            {totalProblems}
-          </h3>
-          <p className="mt-2 text-sm text-slate-400">
-            All available coding challenges
-          </p>
-        </div>
+    <div className="flex min-w-0 flex-col gap-6">
+      {/* Archive totals, independent of active filters */}
+      <section className="grid grid-cols-2 gap-3 xl:grid-cols-4 xl:gap-4">
+        {[
+          {
+            label: "Total Problems",
+            value: summary?.total,
+            color: "text-white",
+            description: "All available coding challenges",
+          },
+          {
+            label: "Easy",
+            value: summary?.easy,
+            color: "text-emerald-300",
+            description: "Warm-up and beginner-friendly",
+          },
+          {
+            label: "Medium",
+            value: summary?.medium,
+            color: "text-amber-300",
+            description: "Core problem-solving practice",
+          },
+          {
+            label: "Hard",
+            value: summary?.hard,
+            color: "text-rose-300",
+            description: "Advanced challenge mode",
+          },
+        ].map((stat) => (
+          <div
+            key={stat.label}
+            className="rounded-2xl border border-white/10 bg-slate-900/50 p-4 shadow-lg backdrop-blur-xl sm:rounded-3xl sm:p-5"
+          >
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
+              {stat.label}
+            </p>
 
-        <div className="rounded-3xl border border-white/10 bg-slate-900/50 p-5 shadow-2xl backdrop-blur-xl">
-          <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
-            Easy
-          </p>
-          <h3 className="mt-3 text-3xl font-bold text-emerald-300">
-            {easyCount}
-          </h3>
-          <p className="mt-2 text-sm text-slate-400">
-            Warm-up and beginner-friendly
-          </p>
-        </div>
+            <h3 className={`mt-3 text-3xl font-bold ${stat.color}`}>
+              {stat.value ?? "—"}
+            </h3>
 
-        <div className="rounded-3xl border border-white/10 bg-slate-900/50 p-5 shadow-2xl backdrop-blur-xl">
-          <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
-            Medium
-          </p>
-          <h3 className="mt-3 text-3xl font-bold text-amber-300">
-            {mediumCount}
-          </h3>
-          <p className="mt-2 text-sm text-slate-400">
-            Core problem-solving practice
-          </p>
-        </div>
-
-        <div className="rounded-3xl border border-white/10 bg-slate-900/50 p-5 shadow-2xl backdrop-blur-xl">
-          <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
-            Hard
-          </p>
-          <h3 className="mt-3 text-3xl font-bold text-rose-300">{hardCount}</h3>
-          <p className="mt-2 text-sm text-slate-400">Advanced challenge mode</p>
-        </div>
+            <p className="mt-2 hidden text-sm text-slate-400 sm:block">
+              {stat.description}
+            </p>
+          </div>
+        ))}
       </section>
 
-      {/* Remaining viewport area */}
-      <section className="grid min-h-0 flex-1 gap-6 overflow-hidden xl:grid-cols-4">
-        {/* RED MARKED AREA: fixed controls, scrollable table only */}
-        <div className="flex min-h-0 flex-col overflow-hidden rounded-3xl border border-white/10 bg-slate-900/50 p-5 shadow-2xl backdrop-blur-xl sm:p-6 xl:col-span-3">
-          {/* Fixed archive heading and search */}
-          <div className="mb-5 shrink-0 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+      <section className="grid min-w-0 items-start gap-6 xl:grid-cols-4">
+        <div
+          ref={archiveRef}
+          className="min-w-0 scroll-mt-4 rounded-3xl border border-white/10 bg-slate-900/50 p-4 shadow-2xl backdrop-blur-xl sm:p-6 xl:col-span-3"
+        >
+          <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
               <h2 className="text-xl font-semibold text-white sm:text-2xl">
                 Problem Archive
               </h2>
+
               <p className="mt-2 text-sm leading-7 text-slate-400">
                 Search, filter, and enter any challenge from the archive.
               </p>
             </div>
 
             <input
-              type="text"
-              className="w-full rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 text-sm text-slate-100 outline-none transition placeholder:text-slate-500 focus:border-indigo-400/60 focus:ring-4 focus:ring-indigo-500/15 lg:max-w-sm"
-              placeholder="Search by title, subject, or difficulty..."
+              type="search"
+              aria-label="Search problems"
+              maxLength={100}
+              className="w-full rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 text-sm text-slate-100 outline-none transition placeholder:text-slate-500 focus:border-cyan-400/60 focus:ring-4 focus:ring-cyan-500/10 lg:max-w-sm"
+              placeholder="Search title, subject, difficulty, or ID..."
               value={search}
               onChange={(event) => setSearch(event.target.value)}
             />
           </div>
 
-          {/* Fixed filter row */}
-          <div className="mb-4 shrink-0 flex flex-wrap items-center gap-3">
+          <div className="mb-4 flex flex-wrap items-center gap-3">
             <select
-              value={difficultyFilter}
-              onChange={(event) => setDifficultyFilter(event.target.value)}
-              className="rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2 text-sm text-slate-200 outline-none transition focus:border-indigo-400/60"
+              aria-label="Filter by difficulty"
+              value={query.difficulty}
+              onChange={(event) =>
+                changeFilter("difficulty", event.target.value)
+              }
+              className={INPUT_CLASS}
             >
               <option value="all">All Difficulties</option>
               <option value="easy">Easy</option>
@@ -177,58 +306,126 @@ function Problems() {
             </select>
 
             <select
-              value={subjectFilter}
-              onChange={(event) => setSubjectFilter(event.target.value)}
-              className="rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2 text-sm text-slate-200 outline-none transition focus:border-indigo-400/60"
+              aria-label="Filter by subject"
+              value={query.subjectId}
+              onChange={(event) =>
+                changeFilter("subjectId", event.target.value)
+              }
+              className={`${INPUT_CLASS} max-w-full sm:max-w-[280px]`}
             >
               <option value="all">All Subjects</option>
 
               {subjects.map((subject) => (
-                <option key={subject.id} value={subject.name}>
+                <option key={subject.id} value={String(subject.id)}>
                   {subject.name}
                 </option>
               ))}
             </select>
 
-            <p className="ml-auto text-xs text-slate-500">
-              Showing {filteredProblems.length} of {totalProblems}
-            </p>
+            <label className="flex items-center gap-2 text-xs text-slate-400">
+              Rows
+              <select
+                value={query.pageSize}
+                onChange={(event) =>
+                  changeFilter("pageSize", Number(event.target.value))
+                }
+                className={INPUT_CLASS}
+              >
+                <option value={10}>10</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+              </select>
+            </label>
+
+            <button
+              type="button"
+              className={BUTTON_CLASS}
+              onClick={clearFilters}
+            >
+              Reset
+            </button>
           </div>
 
-          {loading && (
-            <div className="rounded-2xl border border-cyan-400/20 bg-cyan-400/10 px-4 py-4 text-sm text-cyan-200">
+          {subjectError && (
+            <div
+              role="status"
+              className="mb-4 rounded-xl border border-amber-400/20 bg-amber-400/10 p-3 text-xs text-amber-200"
+            >
+              {subjectError}
+              <button
+                type="button"
+                className="ml-2 underline"
+                onClick={() => setSubjectRetry((value) => value + 1)}
+              >
+                Retry subjects
+              </button>
+            </div>
+          )}
+
+          <p
+            role="status"
+            className="mb-4 text-xs text-slate-400"
+          >
+            {resultsPending
+              ? "Loading matching problems..."
+              : error
+                ? "Unable to load results."
+                : pagination
+                  ? `Showing ${pagination.from}–${pagination.to} of ${pagination.total} matching problems`
+                  : "Loading problems..."}
+          </p>
+
+          {resultsPending ? (
+            <div className="rounded-2xl border border-cyan-400/20 bg-cyan-400/10 px-4 py-5 text-sm text-cyan-200">
               Loading problems...
             </div>
-          )}
+          ) : error ? (
+            <div
+              role="alert"
+              className="rounded-2xl border border-rose-400/20 bg-rose-400/10 px-4 py-4 text-sm text-rose-200"
+            >
+              <p>{error}</p>
 
-          {error && !loading && (
-            <div className="rounded-2xl border border-rose-400/20 bg-rose-400/10 px-4 py-4 text-sm text-rose-200">
-              {error}
+              <button
+                type="button"
+                className={`mt-3 ${BUTTON_CLASS}`}
+                onClick={() => setRefreshKey((value) => value + 1)}
+              >
+                Retry
+              </button>
             </div>
-          )}
-
-          {!loading && !error && filteredProblems.length === 0 && (
-            <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-4 text-sm text-slate-300">
+          ) : problems.length === 0 ? (
+            <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-6 text-sm text-slate-300">
               No problems matched your current search and filters.
             </div>
-          )}
-
-          {/* Only this table container scrolls vertically */}
-          {!loading && !error && filteredProblems.length > 0 && (
-            <div className="min-h-0 flex-1 overflow-auto rounded-2xl border border-white/10 bg-white/[0.02]">
-              <table className="w-full min-w-[720px] text-left text-sm">
-                <thead className="sticky top-0 z-10 border-b border-white/10 bg-slate-900/95 text-xs uppercase tracking-wide text-slate-400 backdrop-blur-xl">
+          ) : (
+            <div className="overflow-x-auto rounded-2xl border border-white/10 bg-white/[0.02]">
+              <table className="w-full min-w-[640px] text-left text-sm">
+                <thead className="border-b border-white/10 bg-slate-900 text-xs uppercase tracking-wide text-slate-400">
                   <tr>
-                    <th className="px-4 py-3 font-medium">#</th>
-                    <th className="px-4 py-3 font-medium">Title</th>
-                    <th className="px-4 py-3 font-medium">Difficulty</th>
-                    <th className="px-4 py-3 font-medium">Subject</th>
-                    <th className="px-4 py-3 text-right font-medium">Action</th>
+                    <th scope="col" className="px-4 py-3 font-medium">
+                      #
+                    </th>
+                    <th scope="col" className="px-4 py-3 font-medium">
+                      Title
+                    </th>
+                    <th scope="col" className="px-4 py-3 font-medium">
+                      Difficulty
+                    </th>
+                    <th scope="col" className="px-4 py-3 font-medium">
+                      Subject
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-4 py-3 text-right font-medium"
+                    >
+                      Action
+                    </th>
                   </tr>
                 </thead>
 
                 <tbody className="divide-y divide-white/10">
-                  {filteredProblems.map((problem) => (
+                  {problems.map((problem) => (
                     <tr
                       key={problem.id}
                       className="transition hover:bg-white/[0.03]"
@@ -274,6 +471,7 @@ function Problems() {
                       <td className="px-4 py-3 text-right">
                         <Link
                           to={`/problems/${problem.id}`}
+                          aria-label={`Solve ${problem.title}`}
                           className="inline-flex items-center justify-center rounded-xl border border-white/10 bg-white/[0.05] px-3 py-1.5 text-xs font-semibold text-slate-200 transition hover:bg-white/10 hover:text-white"
                         >
                           Solve
@@ -285,34 +483,95 @@ function Problems() {
               </table>
             </div>
           )}
+
+          {pagination && !error && (
+            <nav
+              aria-label="Problem archive pagination"
+              className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4"
+            >
+              <span className="text-xs text-slate-400">
+                Page {pagination.page} of {pagination.total_pages}
+              </span>
+
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className={BUTTON_CLASS}
+                  disabled={resultsPending || pagination.page <= 1}
+                  onClick={() => changePage(1)}
+                >
+                  First
+                </button>
+
+                <button
+                  type="button"
+                  className={BUTTON_CLASS}
+                  disabled={resultsPending || pagination.page <= 1}
+                  onClick={() => changePage(pagination.page - 1)}
+                >
+                  Previous
+                </button>
+
+                <button
+                  type="button"
+                  className={BUTTON_CLASS}
+                  disabled={
+                    resultsPending ||
+                    pagination.page >= pagination.total_pages
+                  }
+                  onClick={() => changePage(pagination.page + 1)}
+                >
+                  Next
+                </button>
+
+                <button
+                  type="button"
+                  className={BUTTON_CLASS}
+                  disabled={
+                    resultsPending ||
+                    pagination.page >= pagination.total_pages
+                  }
+                  onClick={() => changePage(pagination.total_pages)}
+                >
+                  Last
+                </button>
+              </div>
+            </nav>
+          )}
         </div>
 
-        {/* Right side panel */}
-        <div className="min-h-0 space-y-6 overflow-y-auto pr-1 xl:col-span-1">
+        <aside className="min-w-0 space-y-6 xl:col-span-1">
           <div className="rounded-3xl border border-white/10 bg-slate-900/50 p-5 shadow-2xl backdrop-blur-xl">
-            <h3 className="text-lg font-semibold text-white">Filter Summary</h3>
+            <h3 className="text-lg font-semibold text-white">
+              Filter Summary
+            </h3>
 
             <div className="mt-5 space-y-4">
-              <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
-                <span className="text-sm text-slate-400">Visible</span>
-                <strong className="text-base text-white">
-                  {filteredProblems.length}
-                </strong>
-              </div>
-
-              <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
-                <span className="text-sm text-slate-400">Difficulty</span>
-                <strong className="text-sm capitalize text-white">
-                  {difficultyFilter}
-                </strong>
-              </div>
-
-              <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
-                <span className="text-sm text-slate-400">Subject</span>
-                <strong className="max-w-[140px] truncate text-right text-sm text-white">
-                  {subjectFilter === "all" ? "All" : subjectFilter}
-                </strong>
-              </div>
+              {[
+                [
+                  "Matching",
+                  resultsPending || error
+                    ? "—"
+                    : (pagination?.total ?? 0),
+                ],
+                [
+                  "Difficulty",
+                  query.difficulty === "all" ? "All" : query.difficulty,
+                ],
+                ["Subject", selectedSubject],
+              ].map(([label, value]) => (
+                <div
+                  key={label}
+                  className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3"
+                >
+                  <span className="text-sm text-slate-400">
+                    {label}
+                  </span>
+                  <strong className="max-w-[180px] truncate text-right text-sm capitalize text-white">
+                    {value}
+                  </strong>
+                </div>
+              ))}
             </div>
           </div>
 
@@ -323,22 +582,20 @@ function Problems() {
 
             <ul className="mt-5 space-y-4 text-sm leading-7 text-slate-300">
               <li>
-                <strong className="text-emerald-300">Easy:</strong> basic
-                implementation and warm-up level.
+                <strong className="text-emerald-300">Easy:</strong>{" "}
+                basic implementation and warm-up level.
               </li>
-
               <li>
-                <strong className="text-amber-300">Medium:</strong> stronger
-                logic, patterns, and careful handling.
+                <strong className="text-amber-300">Medium:</strong>{" "}
+                stronger logic, patterns, and careful handling.
               </li>
-
               <li>
-                <strong className="text-rose-300">Hard:</strong> advanced
-                reasoning and tighter constraints.
+                <strong className="text-rose-300">Hard:</strong>{" "}
+                advanced reasoning and tighter constraints.
               </li>
             </ul>
           </div>
-        </div>
+        </aside>
       </section>
     </div>
   );

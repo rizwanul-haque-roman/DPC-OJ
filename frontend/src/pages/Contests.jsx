@@ -9,18 +9,13 @@ const FILTERS = [
   { value: "ended", label: "Finished" },
 ];
 
-const ROW_COLUMNS =
-  "xl:grid-cols-[minmax(0,1fr)_150px_180px_130px_120px]";
+const ROW_COLUMNS = "xl:grid-cols-[minmax(0,1fr)_150px_180px_130px_120px]";
 
 function getStatus(contest, now) {
   const start = new Date(contest.start_time).getTime();
   const end = new Date(contest.end_time).getTime();
 
-  if (
-    !Number.isFinite(start) ||
-    !Number.isFinite(end) ||
-    end <= start
-  ) {
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
     return "invalid";
   }
 
@@ -57,11 +52,7 @@ function formatDuration(startValue, endValue) {
   const start = new Date(startValue).getTime();
   const end = new Date(endValue).getTime();
 
-  if (
-    !Number.isFinite(start) ||
-    !Number.isFinite(end) ||
-    end <= start
-  ) {
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
     return "Not available";
   }
 
@@ -78,23 +69,19 @@ function StatusBadge({ status }) {
   const styles = {
     live: {
       label: "Live",
-      className:
-        "border-emerald-400/20 bg-emerald-400/10 text-emerald-300",
+      className: "border-emerald-400/20 bg-emerald-400/10 text-emerald-300",
     },
     upcoming: {
       label: "Upcoming",
-      className:
-        "border-cyan-400/20 bg-cyan-400/10 text-cyan-200",
+      className: "border-cyan-400/20 bg-cyan-400/10 text-cyan-200",
     },
     ended: {
       label: "Finished",
-      className:
-        "border-slate-400/20 bg-slate-400/10 text-slate-300",
+      className: "border-slate-400/20 bg-slate-400/10 text-slate-300",
     },
     invalid: {
       label: "Schedule unavailable",
-      className:
-        "border-amber-400/20 bg-amber-400/10 text-amber-200",
+      className: "border-amber-400/20 bg-amber-400/10 text-amber-200",
     },
   };
 
@@ -121,10 +108,11 @@ function ContestRow({ contest, now }) {
   const title = contest.title || "Untitled contest";
   const description = contest.description?.trim();
 
+  const duration = formatDuration(contest.start_time, contest.end_time);
+
   const metadata = [
     `#${contest.id}`,
-    ...(contest.problem_count !== undefined &&
-    contest.problem_count !== null
+    ...(contest.problem_count !== undefined && contest.problem_count !== null
       ? [`${Number(contest.problem_count)} problems`]
       : []),
     ...(contest.participant_count !== undefined &&
@@ -135,27 +123,40 @@ function ContestRow({ contest, now }) {
 
   return (
     <article
-      className={`grid grid-cols-1 items-center gap-4 rounded-2xl border border-white/10 bg-slate-900/60 px-5 py-4 transition hover:border-cyan-400/30 hover:bg-slate-900/80 ${ROW_COLUMNS}`}
+      className={[
+        "grid grid-cols-[minmax(0,1fr)_auto]",
+        "items-center gap-x-3 gap-y-2",
+        "rounded-2xl border border-white/10",
+        "bg-slate-900/60 px-4 py-3",
+        "transition hover:border-cyan-400/30",
+        "hover:bg-slate-900/80",
+        "xl:gap-4 xl:px-5 xl:py-4",
+        ROW_COLUMNS,
+      ].join(" ")}
     >
+      {/* Title: first line on mobile */}
       <div className="min-w-0">
-        <h3 className="text-base font-bold text-white">
+        <h3 className="break-words text-sm font-bold text-white xl:text-base">
           <Link
             to={`/contests/${contest.id}`}
-            className="break-words transition hover:text-cyan-200 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-cyan-300"
+            className="transition hover:text-cyan-200 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-cyan-300"
           >
             {title}
           </Link>
         </h3>
 
         <div className="mt-1 flex min-w-0 items-center gap-2 text-xs text-slate-500">
-          <span className="shrink-0">
+          <span className="hidden shrink-0 xl:inline">
             {metadata.join(" · ")}
           </span>
 
           {description && (
             <>
-              <span aria-hidden="true">·</span>
-              <span className="truncate" title={description}>
+              <span className="hidden xl:inline" aria-hidden="true">
+                ·
+              </span>
+
+              <span className="hidden truncate xl:inline" title={description}>
                 {description}
               </span>
             </>
@@ -163,43 +164,49 @@ function ContestRow({ contest, now }) {
         </div>
       </div>
 
-      <div>
-        <span className="mb-1 block text-xs text-slate-500 xl:hidden">
-          Status
-        </span>
+      {/* Status: beside title on mobile */}
+      <div className="justify-self-end xl:justify-self-start">
         <StatusBadge status={status} />
       </div>
 
-      <div>
-        <span className="mb-1 block text-xs text-slate-500 xl:hidden">
-          Starts
+      {/* Compact mobile metadata: second line */}
+      <div className="min-w-0 text-xs leading-5 text-slate-400 xl:hidden">
+        <span className="mr-2 font-mono text-slate-500">#{contest.id}</span>
+
+        <span>{start.date}</span>
+
+        {start.time && <span className="ml-1">{start.time}</span>}
+
+        <span className="mx-2 text-slate-600" aria-hidden="true">
+          ·
         </span>
-        <p className="text-sm font-medium text-slate-200">
-          {start.date}
-        </p>
+
+        <span>{duration}</span>
+      </div>
+
+      {/* Desktop start date column */}
+      <div className="hidden xl:block">
+        <p className="text-sm font-medium text-slate-200">{start.date}</p>
+
         {start.time && (
-          <p className="mt-1 text-xs text-slate-500">
-            {start.time}
-          </p>
+          <p className="mt-1 text-xs text-slate-500">{start.time}</p>
         )}
       </div>
 
-      <div>
-        <span className="mb-1 block text-xs text-slate-500 xl:hidden">
-          Duration
-        </span>
-        <p className="text-sm text-slate-300">
-          {formatDuration(contest.start_time, contest.end_time)}
-        </p>
+      {/* Desktop duration column */}
+      <div className="hidden xl:block">
+        <p className="text-sm text-slate-300">{duration}</p>
       </div>
 
-      <div className="xl:justify-self-end">
+      {/* Action: beside metadata on mobile */}
+      <div className="justify-self-end">
         <Link
           to={`/contests/${contest.id}`}
           aria-label={`View contest: ${title}`}
-          className="inline-flex items-center justify-center whitespace-nowrap rounded-xl border border-cyan-400/20 bg-cyan-400/10 px-4 py-2 text-sm font-semibold text-cyan-200 transition hover:border-cyan-400/40 hover:bg-cyan-400/20 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-cyan-300"
+          className="inline-flex items-center justify-center gap-1 whitespace-nowrap rounded-lg border border-cyan-400/20 bg-cyan-400/10 px-3 py-1.5 text-xs font-semibold text-cyan-200 transition hover:bg-cyan-400/20 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-cyan-300 xl:rounded-xl xl:px-4 xl:py-2 xl:text-sm"
         >
-          View <span aria-hidden="true" className="ml-2">→</span>
+          View
+          <span aria-hidden="true">→</span>
         </Link>
       </div>
     </article>
@@ -285,8 +292,7 @@ export default function Contests() {
 
     return contests.filter((contest) => {
       const matchesStatus =
-        statusFilter === "all" ||
-        getStatus(contest, now) === statusFilter;
+        statusFilter === "all" || getStatus(contest, now) === statusFilter;
 
       const matchesSearch =
         !normalizedSearch ||
@@ -316,9 +322,7 @@ export default function Contests() {
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-300">
               DPC-OJ Competitions
             </p>
-            <h2 className="mt-2 text-2xl font-bold text-white">
-              Contests
-            </h2>
+            <h2 className="mt-2 text-2xl font-bold text-white">Contests</h2>
             <p className="mt-2 text-sm leading-7 text-slate-400">
               Explore upcoming competitions, live contests, and completed
               events.
@@ -487,11 +491,7 @@ export default function Contests() {
 
             <div className="mt-3 space-y-3">
               {filteredContests.map((contest) => (
-                <ContestRow
-                  key={contest.id}
-                  contest={contest}
-                  now={now}
-                />
+                <ContestRow key={contest.id} contest={contest} now={now} />
               ))}
             </div>
 
