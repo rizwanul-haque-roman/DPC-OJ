@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import api from "../api/axios";
+import PasswordInput from "../components/PasswordInput";
 
 function Register() {
   const [formData, setFormData] = useState({
@@ -152,29 +153,18 @@ function Register() {
             />
           </div>
 
-          <div>
-            <label
-              htmlFor="password"
-              className="mb-2 block text-sm font-medium text-slate-200"
-            >
-              Password
-            </label>
-            <input
-              id="password"
-              className="w-full rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 text-slate-100 outline-none transition placeholder:text-slate-500 focus:border-indigo-400/60 focus:ring-4 focus:ring-indigo-500/15"
-              type="password"
-              name="password"
-              placeholder="Create a password"
-              value={formData.password}
-              onChange={handleChange}
-              minLength={6}
-              autoComplete="new-password"
-              required
-            />
-            <p className="mt-2 text-xs text-slate-500">
-              Password must contain at least 6 characters.
-            </p>
-          </div>
+          <PasswordInput
+            id="register-password"
+            label="Password"
+            name="password"
+            value={formData.password}
+            onChange={handleChange}
+            autoComplete="new-password"
+            placeholder="Create a password"
+            minLength={6}
+            hint="Password must contain at least 6 characters."
+            required
+          />
 
           <button
             className="inline-flex w-full items-center justify-center rounded-2xl bg-gradient-to-r from-indigo-500 to-cyan-400 px-4 py-3 text-sm font-semibold text-white shadow-lg transition hover:translate-y-[-1px] hover:shadow-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-60"

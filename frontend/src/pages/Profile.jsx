@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import api from "../api/axios";
 import ActivityHeatmap from "../components/ActivityHeatmap";
 import "../components/ProfileDashboard.css";
+import PasswordInput from "../components/PasswordInput";
 
 const fields = {
   display_name: "Display name",
@@ -14,6 +15,71 @@ const fields = {
 };
 
 const date = (value) => (value ? new Date(value).toLocaleString() : "—");
+
+const PASSWORD_RULES = [
+  {
+    id: "length",
+    label: "At least 8 characters",
+    test: (value) => value.length >= 8,
+  },
+  {
+    id: "bytes",
+    label: "No more than 72 UTF-8 bytes",
+    test: (value) => new TextEncoder().encode(value).length <= 72,
+  },
+  {
+    id: "uppercase",
+    label: "One uppercase letter",
+    test: (value) => /[A-Z]/.test(value),
+  },
+  {
+    id: "lowercase",
+    label: "One lowercase letter",
+    test: (value) => /[a-z]/.test(value),
+  },
+  {
+    id: "number",
+    label: "One number",
+    test: (value) => /[0-9]/.test(value),
+  },
+  {
+    id: "symbol",
+    label: "One special character",
+    test: (value) => /[^A-Za-z0-9]/.test(value),
+  },
+];
+
+function validateNewPassword(newPassword, confirmPassword) {
+  if (!newPassword) {
+    return {
+      valid: false,
+      message: "Enter a new password.",
+    };
+  }
+
+  const failed = PASSWORD_RULES.filter((rule) => !rule.test(newPassword));
+
+  if (failed.length > 0) {
+    return {
+      valid: false,
+      message: `Password needs: ${failed
+        .map((rule) => rule.label.toLowerCase())
+        .join(", ")}.`,
+    };
+  }
+
+  if (newPassword !== confirmPassword) {
+    return {
+      valid: false,
+      message: "New password and confirmation do not match.",
+    };
+  }
+
+  return {
+    valid: true,
+    message: "Password meets all requirements.",
+  };
+}
 
 export default function Profile() {
   const { id } = useParams();
@@ -38,6 +104,11 @@ export default function Profile() {
     current_password: "",
     new_password: "",
     confirm: "",
+  });
+
+  const [passwordValidation, setPasswordValidation] = useState({
+    valid: false,
+    message: "",
   });
 
   const [busy, setBusy] = useState(false);
@@ -158,6 +229,17 @@ export default function Profile() {
       saving.current = false;
       setBusy(false);
     }
+  }
+
+  function updatePasswordField(key, value) {
+    const next = {
+      ...password,
+      [key]: value,
+    };
+
+    setPassword(next);
+
+    setPasswordValidation(validateNewPassword(next.new_password, next.confirm));
   }
 
   async function savePassword(event) {
@@ -498,29 +580,99 @@ export default function Profile() {
                 least 8 characters; maximum 72 UTF-8 bytes.
               </p>
 
-              {[
-                ["current_password", "Current password", "current-password"],
-                ["new_password", "New password", "new-password"],
-                ["confirm", "Confirm new password", "new-password"],
-              ].map(([key, label, auto]) => (
-                <label key={key} className="pd-label">
-                  {label}
-                  <input
-                    className="pd-input"
-                    type="password"
-                    autoComplete={auto}
-                    required
-                    minLength={key === "current_password" ? undefined : 8}
-                    value={password[key]}
-                    onChange={(e) =>
-                      setPassword({ ...password, [key]: e.target.value })
-                    }
-                  />
-                </label>
-              ))}
+              <PasswordInput
+                id="current-password"
+                label="Current password"
+                value={password.current_password}
+                onChange={(event) =>
+                  updatePasswordField("current_password", event.target.value)
+                }
+                autoComplete="current-password"
+                placeholder="Enter your current password"
+                required
+              />
 
-              <button type="submit" className="pd-button" disabled={busy}>
-                Change password and sign out
+              <div>
+                <PasswordInput
+                  id="new-password"
+                  label="New password"
+                  value={password.new_password}
+                  onChange={(event) =>
+                    updatePasswordField("new_password", event.target.value)
+                  }
+                  autoComplete="new-password"
+                  placeholder="Create a new password"
+                  describedBy="new-password-requirements"
+                  required
+                />
+
+                <ul
+                  id="new-password-requirements"
+                  className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2"
+                >
+                  {PASSWORD_RULES.map((rule) => {
+                    const passed = rule.test(password.new_password);
+
+                    return (
+                      <li
+                        key={rule.id}
+                        className={[
+                          "flex items-center gap-2 rounded-lg border px-3 py-2 text-xs",
+                          passed
+                            ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-200"
+                            : "border-white/10 bg-white/[0.03] text-slate-400",
+                        ].join(" ")}
+                      >
+                        <span aria-hidden="true">{passed ? "✓" : "○"}</span>
+                        {rule.label}
+                      </li>
+                    );
+                  })}
+                </ul>
+
+                {password.new_password && (
+                  <p
+                    className={[
+                      "mt-3 text-xs font-medium",
+                      passwordValidation.valid
+                        ? "text-emerald-300"
+                        : "text-amber-300",
+                    ].join(" ")}
+                  >
+                    {passwordValidation.message}
+                  </p>
+                )}
+              </div>
+
+              <PasswordInput
+                id="confirm-password"
+                label="Confirm new password"
+                value={password.confirm}
+                onChange={(event) =>
+                  updatePasswordField("confirm", event.target.value)
+                }
+                autoComplete="new-password"
+                placeholder="Confirm your new password"
+                error={
+                  password.confirm && password.new_password !== password.confirm
+                    ? "Passwords do not match."
+                    : ""
+                }
+                required
+              />
+
+              <button
+                type="submit"
+                className="pd-button"
+                disabled={
+                  busy ||
+                  !password.current_password ||
+                  !password.new_password ||
+                  !password.confirm ||
+                  !passwordValidation.valid
+                }
+              >
+                {busy ? "Changing password..." : "Change password and sign out"}
               </button>
             </form>
           </div>
