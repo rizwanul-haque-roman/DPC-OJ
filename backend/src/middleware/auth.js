@@ -7,7 +7,7 @@ async function requireAuth(req, res, next) {
 
   if (!header.startsWith("Bearer ") || !header.slice(7).trim()) {
     return res.status(401).json({
-      error: "Authentication token is required.",
+      error: "Login required. please login to access this resource.",
     });
   }
 
