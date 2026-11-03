@@ -70,7 +70,7 @@ function Register() {
             Build. Submit. Conquer the judge.
           </h2>
           <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-400 sm:text-base">
-            CoolOJ gives you a sleek modern coding space to solve problems,
+            DPC-OJ gives you a sleek modern coding space to solve problems,
             track verdicts, and level up your competitive programming workflow.
           </p>
         </div>
