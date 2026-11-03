@@ -2,8 +2,8 @@ import axios from "axios";
 
 const api = axios.create({
   // use localhost for local development and vercel for production deployment
-  baseURL: "http://localhost:5000/api",
-  // baseURL: "https://dpc-oj-backend.vercel.app/api",
+  // baseURL: "http://localhost:5000/api",
+  baseURL: "https://dpc-oj-backend.vercel.app/api",
   headers: {
     "Content-Type": "application/json",
   },
