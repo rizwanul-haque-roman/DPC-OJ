@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import Editor from "@monaco-editor/react";
 import api from "../api/axios";
@@ -157,6 +157,7 @@ function LearnTopic() {
   const [completed, setCompleted] = useState(false);
   const [savingProgress, setSavingProgress] = useState(false);
   const [progressError, setProgressError] = useState("");
+  const [practiceStatus, setPracticeStatus] = useState(null);
 
   const lessonScrollRef = useRef(null);
   const runInFlightRef = useRef(false);
@@ -166,6 +167,18 @@ function LearnTopic() {
   const progressSequenceRef = useRef(0);
 
   currentContextRef.current = contextKey;
+
+  const handlePracticeStatusChange = useCallback((status) => {
+    if (currentContextRef.current !== contextKey) return;
+    setPracticeStatus({ ...status, contextKey });
+  }, [contextKey]);
+
+  const practiceIsCurrent = practiceStatus?.contextKey === contextKey;
+  const canCompletePractice = practiceIsCurrent &&
+    practiceStatus.loading === false &&
+    !practiceStatus.error &&
+    practiceStatus.authenticated === true &&
+    practiceStatus.solvedCount === practiceStatus.total;
 
   const isLocked = lockedInfo !== null;
   const isReady = loadedContext === contextKey && !loading;
@@ -499,6 +512,7 @@ function LearnTopic() {
       isLocked ||
       !isReady ||
       progressInFlightRef.current ||
+      !canCompletePractice ||
       currentTopicCompleted
     ) {
       return;
@@ -539,6 +553,10 @@ function LearnTopic() {
       if (!isCurrentRequest()) return;
 
       const responseData = err.response?.data;
+
+      if (responseData?.code === "LESSON_PRACTICE_INCOMPLETE") {
+        setPracticeStatus(null);
+      }
 
       if (
         responseData?.code === "LESSON_LOCKED" &&
@@ -764,8 +782,9 @@ function LearnTopic() {
                 <div className="px-6 py-5">
                   <LessonMarkdown content={topic?.content || ""} />
                   <LessonPracticeProblems
-                    key={topicId}
+                    key={contextKey}
                     topicId={topicId}
+                    onStatusChange={handlePracticeStatusChange}
                   />
                 </div>
               </div>
@@ -776,6 +795,20 @@ function LearnTopic() {
             {progressError && (
               <p role="alert" className="mb-3 text-xs text-rose-300">
                 {progressError}
+              </p>
+            )}
+
+            {!isLocked && !currentTopicCompleted && (
+              <p role="status" className="mb-3 text-xs text-slate-400">
+                {!practiceIsCurrent || practiceStatus.loading
+                  ? "Checking practice completion... Use practice Refresh to recheck if needed."
+                  : practiceStatus.error
+                    ? "Unable to check practice completion. Retry in the practice section."
+                    : !practiceStatus.authenticated
+                      ? "Log in and solve the related practice problems to complete this lesson."
+                      : !canCompletePractice
+                        ? `Solve all related practice problems first (${practiceStatus.solvedCount}/${practiceStatus.total} solved).`
+                        : "Practice requirements met. You can mark this lesson complete."}
               </p>
             )}
 
@@ -806,7 +839,8 @@ function LearnTopic() {
                 disabled={
                   isLocked ||
                   currentTopicCompleted ||
-                  savingProgress
+                  savingProgress ||
+                  !canCompletePractice
                 }
                 aria-busy={savingProgress}
                 className={[

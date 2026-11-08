@@ -32,7 +32,7 @@ function difficultyClass(value) {
   return "bg-white/5 text-slate-400";
 }
 
-export default function LessonPracticeProblems({ topicId }) {
+export default function LessonPracticeProblems({ topicId, onStatusChange }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -101,6 +101,31 @@ export default function LessonPracticeProblems({ topicId }) {
     (problem) => problem.solved === true,
   ).length;
 
+  useEffect(() => {
+    onStatusChange?.({
+      loading,
+      error,
+      authenticated,
+      total: problems.length,
+      solvedCount,
+    });
+  }, [loading, error, authenticated, problems.length, solvedCount, onStatusChange]);
+
+  function refreshPractice() {
+    setLoading(true);
+    setError("");
+    setRefresh((value) => value + 1);
+  }
+
+  useEffect(() => {
+    function handleFocus() {
+      setLoading(true);
+      setRefresh((value) => value + 1);
+    }
+    window.addEventListener("focus", handleFocus);
+    return () => window.removeEventListener("focus", handleFocus);
+  }, [topicId]);
+
   const pageCount = Math.max(
     1,
     Math.ceil(problems.length / PAGE_SIZE),
@@ -130,7 +155,7 @@ export default function LessonPracticeProblems({ topicId }) {
         <button
           type="button"
           disabled={loading}
-          onClick={() => setRefresh((value) => value + 1)}
+          onClick={refreshPractice}
           className={buttonClass}
         >
           <RefreshCw
@@ -157,7 +182,7 @@ export default function LessonPracticeProblems({ topicId }) {
 
           <button
             type="button"
-            onClick={() => setRefresh((value) => value + 1)}
+            onClick={refreshPractice}
             className={`${buttonClass} mt-3`}
           >
             Retry
