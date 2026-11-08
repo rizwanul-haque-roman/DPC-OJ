@@ -278,10 +278,9 @@ router.get("/meta/subjects", async (req, res) => {
     const [rows] = await db.execute(`
       SELECT
         id,
-        name,
-        semester_no
+        name
       FROM subjects
-      ORDER BY semester_no ASC, id ASC
+      ORDER BY name ASC, id ASC
     `);
 
     return res.json(rows);

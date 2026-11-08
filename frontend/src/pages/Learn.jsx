@@ -5,20 +5,6 @@ import api from "../api/axios";
 const COURSE_COLUMNS =
   "xl:grid-cols-[minmax(0,1fr)_130px_100px_190px_180px]";
 
-function semesterLabel(number) {
-  const semester = Number(number);
-  const year = Math.ceil(semester / 2);
-
-  const yearLabels = {
-    1: "1st",
-    2: "2nd",
-    3: "3rd",
-    4: "4th",
-  };
-
-  return `${yearLabels[year] || `${year}th`} year - Semester ${semester}`;
-}
-
 function CourseRow({ subject, onRetry }) {
   const hasLessons =
     !subject.isPlaceholder &&
@@ -221,79 +207,23 @@ function CourseRow({ subject, onRetry }) {
 }
 
 function Learn() {
-  const [semesters, setSemesters] = useState([]);
-  const [selectedSemester, setSelectedSemester] = useState(null);
   const [subjects, setSubjects] = useState([]);
-
-  const [loading, setLoading] = useState(true);
-  const [subjectLoading, setSubjectLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [subjectLoading, setSubjectLoading] = useState(true);
   const [subjectError, setSubjectError] = useState("");
-
-  const [semesterRetry, setSemesterRetry] = useState(0);
   const [subjectRetry, setSubjectRetry] = useState(0);
-
-  const selectedSemesterId = selectedSemester?.id ?? null;
-
-  useEffect(() => {
-    const controller = new AbortController();
-
-    async function fetchSemesters() {
-      setLoading(true);
-      setError("");
-
-      try {
-        const response = await api.get("/learn/semesters", {
-          signal: controller.signal,
-        });
-
-        if (controller.signal.aborted) return;
-
-        if (!Array.isArray(response.data)) {
-          throw new Error("Unexpected semester response.");
-        }
-
-        const availableSemesters = response.data
-          .filter((semester) => Number(semester.is_active) === 1)
-          .sort((a, b) => Number(a.number) - Number(b.number));
-
-        setSemesters(availableSemesters);
-
-        setSelectedSemester((previous) => {
-          const existingSelection = availableSemesters.find(
-            (semester) => String(semester.id) === String(previous?.id),
-          );
-
-          return existingSelection || availableSemesters[0] || null;
-        });
-      } catch (err) {
-        if (controller.signal.aborted) return;
-
-        setError(
-          err.response?.data?.error ||
-            err.message ||
-            "Failed to load semesters.",
-        );
-      } finally {
-        if (!controller.signal.aborted) {
-          setLoading(false);
-        }
-      }
-    }
-
-    fetchSemesters();
-
-    return () => controller.abort();
-  }, [semesterRetry]);
+  const [authRevision, setAuthRevision] = useState(0);
 
   useEffect(() => {
-    if (selectedSemesterId === null) {
-      setSubjects([]);
-      setSubjectError("");
-      setSubjectLoading(false);
-      return;
-    }
+    const updateAuth = () => setAuthRevision((value) => value + 1);
+    window.addEventListener("authChanged", updateAuth);
+    window.addEventListener("storage", updateAuth);
+    return () => {
+      window.removeEventListener("authChanged", updateAuth);
+      window.removeEventListener("storage", updateAuth);
+    };
+  }, []);
 
+  useEffect(() => {
     const controller = new AbortController();
 
     async function fetchSubjects() {
@@ -303,7 +233,7 @@ function Learn() {
 
       try {
         const response = await api.get(
-          `/learn/semesters/${selectedSemesterId}/subjects`,
+          "/learn/subjects",
           { signal: controller.signal },
         );
 
@@ -407,123 +337,18 @@ function Learn() {
     fetchSubjects();
 
     return () => controller.abort();
-  }, [selectedSemesterId, subjectRetry]);
+  }, [subjectRetry, authRevision]);
 
-  const selectSemester = (semester) => {
-    if (String(semester.id) === String(selectedSemesterId)) return;
-
-    setSubjects([]);
-    setSubjectError("");
-    setSubjectLoading(true);
-    setSelectedSemester(semester);
-  };
-
-  const retrySubjects = () => {
-    setSubjectRetry((value) => value + 1);
-  };
-
-  if (loading) {
-    return (
-      <div
-        role="status"
-        className="rounded-2xl border border-cyan-400/20 bg-cyan-400/10 px-4 py-4 text-sm text-cyan-200 shadow-lg backdrop-blur-xl"
-      >
-        Loading learning hub...
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div
-        role="alert"
-        className="rounded-2xl border border-rose-400/20 bg-rose-400/10 px-4 py-4 text-sm text-rose-200 shadow-lg backdrop-blur-xl"
-      >
-        <p>{error}</p>
-
-        <button
-          type="button"
-          onClick={() => setSemesterRetry((value) => value + 1)}
-          className="mt-3 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold text-white transition hover:bg-white/10"
-        >
-          Retry
-        </button>
-      </div>
-    );
-  }
+  const retrySubjects = () => setSubjectRetry((value) => value + 1);
 
   return (
     <div className="grid gap-6">
-      {/* Semester selection */}
-      <section className="rounded-3xl border border-white/10 bg-slate-900/50 p-6 shadow-2xl backdrop-blur-xl">
-        <div className="mb-5 flex items-start justify-between gap-4">
-          <div>
-            <h3 className="text-xl font-semibold text-white">
-              Semester Tracks
-            </h3>
-
-            <p className="mt-2 max-w-2xl text-sm leading-7 text-slate-400">
-              Follow the National University CSE semester flow and
-              learn programming through guided lessons and practice.
-            </p>
-          </div>
-        </div>
-
-        {semesters.length === 0 ? (
-          <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-4 text-sm text-slate-400">
-            No learning semesters are available yet.
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-            {semesters.map((semester) => {
-              const isActive =
-                String(selectedSemesterId) === String(semester.id);
-
-              return (
-                <button
-                  key={semester.id}
-                  type="button"
-                  onClick={() => selectSemester(semester)}
-                  aria-pressed={isActive}
-                  className={[
-                    "rounded-3xl border p-5 text-left transition duration-200",
-                    isActive
-                      ? "border-sky-400/40 bg-sky-400/10 shadow-[0_0_0_1px_rgba(87,177,255,0.15),0_16px_40px_rgba(13,22,52,0.35)]"
-                      : "border-white/10 bg-white/5 hover:border-sky-400/30 hover:bg-white/[0.07]",
-                  ].join(" ")}
-                >
-                  <span className="mb-3 inline-block rounded-full bg-indigo-400/15 px-3 py-1 text-xs font-medium text-sky-200">
-                    {semesterLabel(semester.number)}
-                  </span>
-
-                  <h4 className="text-lg font-semibold text-white">
-                    {Number(semester.course_count || 0)}{" "}
-                    {Number(semester.course_count || 0) === 1
-                      ? "course"
-                      : "courses"}
-                  </h4>
-
-                  <p className="mt-2 text-sm leading-7 text-slate-400">
-                    {Array.isArray(semester.course_names) &&
-                    semester.course_names.length > 0
-                      ? semester.course_names.join(", ")
-                      : "No courses added yet."}
-                  </p>
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </section>
-
       {/* Courses */}
       <section className="rounded-3xl border border-white/10 bg-slate-900/50 p-6 shadow-2xl backdrop-blur-xl">
         <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
           <div>
             <h3 className="text-xl font-semibold text-white">
-              {selectedSemester
-                ? `${semesterLabel(selectedSemester.number)} — Courses`
-                : "Courses"}
+              Courses
             </h3>
 
             <p className="mt-2 max-w-2xl text-sm leading-7 text-slate-400">
@@ -533,7 +358,7 @@ function Learn() {
             </p>
           </div>
 
-          {selectedSemester && (
+          {(
             <button
               type="button"
               disabled={subjectLoading}
@@ -567,14 +392,9 @@ function Learn() {
               Retry
             </button>
           </div>
-        ) : !selectedSemester ? (
-          <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-4 text-sm text-slate-400">
-            Select a semester to view its courses.
-          </div>
         ) : subjects.length === 0 ? (
           <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-4 text-sm leading-7 text-slate-400">
-            No programming learning tracks are currently included for
-            this semester.
+            No learning courses are available yet.
           </div>
         ) : (
           <>

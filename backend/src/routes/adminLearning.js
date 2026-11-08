@@ -40,16 +40,11 @@ router.get("/learning/topics", async (req, res) => {
           lt.status,
           lt.created_at,
           lt.updated_at,
-          ss.name AS subject_name,
-          s.number AS semester_number,
-          s.title AS semester_title
+          ss.name AS subject_name
         FROM learn_topics AS lt
-        INNER JOIN semester_subjects AS ss
+        INNER JOIN learning_courses AS ss
           ON ss.id = lt.subject_id
-        INNER JOIN semesters AS s
-          ON s.id = ss.semester_id
         ORDER BY
-          s.number ASC,
           ss.id ASC,
           lt.order_index ASC,
           lt.id ASC
@@ -69,14 +64,13 @@ router.get("/learning/topics", async (req, res) => {
 });
 
 // GET courses with lesson counts.
-// Includes placeholders and inactive semesters for administration.
+// Includes placeholders and inactive courses for administration.
 router.get("/learning/subjects", async (req, res) => {
   try {
     const [rows] = await db.execute(
       `
         SELECT
           ss.id,
-          ss.semester_id,
           ss.name,
           ss.language,
           ss.description,
@@ -86,9 +80,7 @@ router.get("/learning/subjects", async (req, res) => {
           ss.editor_enabled,
           ss.run_enabled,
           ss.editor_message,
-          s.number AS semester_number,
-          s.title AS semester_title,
-          s.is_active AS semester_active,
+          ss.is_active,
           COUNT(lt.id) AS lesson_count,
           COUNT(
             CASE WHEN lt.status = 'draft' THEN 1 END
@@ -99,14 +91,11 @@ router.get("/learning/subjects", async (req, res) => {
           COUNT(
             CASE WHEN lt.status = 'archived' THEN 1 END
           ) AS archived_count
-        FROM semester_subjects AS ss
-        INNER JOIN semesters AS s
-          ON s.id = ss.semester_id
+        FROM learning_courses AS ss
         LEFT JOIN learn_topics AS lt
           ON lt.subject_id = ss.id
         GROUP BY
           ss.id,
-          ss.semester_id,
           ss.name,
           ss.language,
           ss.description,
@@ -116,10 +105,8 @@ router.get("/learning/subjects", async (req, res) => {
           ss.editor_enabled,
           ss.run_enabled,
           ss.editor_message,
-          s.number,
-          s.title,
-          s.is_active
-        ORDER BY s.number ASC, ss.id ASC
+          ss.is_active
+        ORDER BY ss.name ASC, ss.id ASC
       `,
     );
 
@@ -127,7 +114,7 @@ router.get("/learning/subjects", async (req, res) => {
       rows.map((row) => ({
         ...row,
         is_placeholder: Boolean(Number(row.is_placeholder)),
-        semester_active: Boolean(Number(row.semester_active)),
+        is_active: Boolean(Number(row.is_active)),
         editor_enabled: Boolean(Number(row.editor_enabled)),
         run_enabled: Boolean(Number(row.run_enabled)),
         lesson_count: Number(row.lesson_count),
@@ -160,7 +147,7 @@ router.get("/learning/subjects/:subjectId/topics", async (req, res) => {
     const [subjects] = await db.execute(
       `
         SELECT id
-        FROM semester_subjects
+        FROM learning_courses
         WHERE id = ?
         LIMIT 1
       `,
@@ -230,14 +217,10 @@ router.get("/learning/topics/:topicId", async (req, res) => {
           ss.default_language,
           ss.editor_enabled,
           ss.run_enabled,
-          ss.editor_message,
-          s.number AS semester_number,
-          s.title AS semester_title
+          ss.editor_message
         FROM learn_topics AS lt
-        INNER JOIN semester_subjects AS ss
+        INNER JOIN learning_courses AS ss
           ON ss.id = lt.subject_id
-        INNER JOIN semesters AS s
-          ON s.id = ss.semester_id
         WHERE lt.id = ?
         LIMIT 1
       `,
@@ -871,7 +854,7 @@ router.delete(
 );
 
 // ============================================================
-// Semester, course, and lesson-creation management.
+// Course and lesson-creation management.
 // Keep the existing lesson detail/edit/status/delete routes.
 // ============================================================
 
@@ -1037,6 +1020,7 @@ const learningCourseFields = [
   "language",
   "description",
   "is_placeholder",
+  "is_active",
   "execution_mode",
   "default_language",
   "editor_enabled",
@@ -1053,6 +1037,7 @@ function normalizeLearningCourse(body, existing = null) {
     language: null,
     description: null,
     is_placeholder: false,
+    is_active: true,
     execution_mode: "disabled",
     default_language: null,
     editor_enabled: false,
@@ -1100,6 +1085,7 @@ function normalizeLearningCourse(body, existing = null) {
 
   for (const field of [
     "is_placeholder",
+    "is_active",
     "editor_enabled",
     "run_enabled",
   ]) {
@@ -1144,89 +1130,23 @@ function normalizeLearningCourse(body, existing = null) {
   return next;
 }
 
-// GET all semesters, including inactive semesters.
-router.get("/learning/semesters", async (req, res) => {
-  try {
-    const [rows] = await db.execute(
-      `
-        SELECT
-          s.id,
-          s.number,
-          s.title,
-          s.description,
-          s.is_active,
-          COUNT(ss.id) AS course_count
-        FROM semesters AS s
-        LEFT JOIN semester_subjects AS ss
-          ON ss.semester_id = s.id
-        GROUP BY
-          s.id,
-          s.number,
-          s.title,
-          s.description,
-          s.is_active
-        ORDER BY s.number ASC, s.id ASC
-      `,
-    );
-
-    return res.json({
-      semesters: rows.map((row) => ({
-        ...row,
-        is_active: Boolean(Number(row.is_active)),
-        course_count: Number(row.course_count),
-      })),
-    });
-  } catch (error) {
-    return sendLearningManagementError(
-      res,
-      error,
-      "Admin semester list error:",
-    );
-  }
-});
-
-// POST create a course in a semester.
+// POST create an independent course.
 router.post("/learning/subjects", async (req, res) => {
   try {
-    validateLearningBody(req.body, [
-      "semester_id",
-      ...learningCourseFields,
-    ]);
-
-    const semesterId = learningPositiveId(
-      req.body.semester_id,
-      "Semester ID",
-    );
+    validateLearningBody(req.body, learningCourseFields);
 
     const course = normalizeLearningCourse(req.body);
 
     const subject = await learningManagementTransaction(
       async (connection) => {
-        const [semesters] = await connection.execute(
-          `
-            SELECT id
-            FROM semesters
-            WHERE id = ?
-            FOR UPDATE
-          `,
-          [semesterId],
-        );
-
-        if (!semesters.length) {
-          throw learningManagementError(
-            404,
-            "Semester not found.",
-          );
-        }
-
         const [result] = await connection.execute(
           `
-            INSERT INTO semester_subjects (
-              semester_id,
+            INSERT INTO learning_courses (
               name,
               language,
               description,
               is_placeholder,
+              is_active,
               execution_mode,
               default_language,
               editor_enabled,
@@ -1236,11 +1156,11 @@ router.post("/learning/subjects", async (req, res) => {
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           `,
           [
-            semesterId,
             course.name,
             course.language,
             course.description,
             course.is_placeholder,
+            course.is_active,
             course.execution_mode,
             course.default_language,
             course.editor_enabled,
@@ -1251,7 +1171,6 @@ router.post("/learning/subjects", async (req, res) => {
 
         const created = {
           id: result.insertId,
-          semester_id: semesterId,
           ...course,
         };
 
@@ -1283,7 +1202,6 @@ router.post("/learning/subjects", async (req, res) => {
 });
 
 // PATCH course details/settings.
-// Moving a course to another semester is intentionally excluded.
 router.patch("/learning/subjects/:subjectId", async (req, res) => {
   try {
     const subjectId = learningRouteId(
@@ -1298,7 +1216,7 @@ router.patch("/learning/subjects/:subjectId", async (req, res) => {
         const [rows] = await connection.execute(
           `
             SELECT *
-            FROM semester_subjects
+            FROM learning_courses
             WHERE id = ?
             FOR UPDATE
           `,
@@ -1325,7 +1243,6 @@ router.patch("/learning/subjects/:subjectId", async (req, res) => {
             message: "No changes were necessary.",
             subject: {
               id: subjectId,
-              semester_id: existing.semester_id,
               ...before,
             },
           };
@@ -1333,12 +1250,13 @@ router.patch("/learning/subjects/:subjectId", async (req, res) => {
 
         await connection.execute(
           `
-            UPDATE semester_subjects
+            UPDATE learning_courses
             SET
               name = ?,
               language = ?,
               description = ?,
               is_placeholder = ?,
+              is_active = ?,
               execution_mode = ?,
               default_language = ?,
               editor_enabled = ?,
@@ -1351,6 +1269,7 @@ router.patch("/learning/subjects/:subjectId", async (req, res) => {
             next.language,
             next.description,
             next.is_placeholder,
+            next.is_active,
             next.execution_mode,
             next.default_language,
             next.editor_enabled,
@@ -1368,7 +1287,6 @@ router.patch("/learning/subjects/:subjectId", async (req, res) => {
           targetId: subjectId,
           description: `Updated course "${next.name}".`,
           details: {
-            semester_id: existing.semester_id,
             changed_fields: changedFields,
           },
           changes: diffChanges(
@@ -1382,7 +1300,6 @@ router.patch("/learning/subjects/:subjectId", async (req, res) => {
           message: "Course updated.",
           subject: {
             id: subjectId,
-            semester_id: existing.semester_id,
             ...next,
           },
         };
@@ -1429,8 +1346,8 @@ router.delete("/learning/subjects/:subjectId", async (req, res) => {
     await learningManagementTransaction(async (connection) => {
       const [rows] = await connection.execute(
         `
-          SELECT id, semester_id, name
-          FROM semester_subjects
+          SELECT id, name
+          FROM learning_courses
           WHERE id = ?
           FOR UPDATE
         `,
@@ -1466,7 +1383,7 @@ router.delete("/learning/subjects/:subjectId", async (req, res) => {
 
       await connection.execute(
         `
-          DELETE FROM semester_subjects
+          DELETE FROM learning_courses
           WHERE id = ?
         `,
         [subjectId],
@@ -1480,7 +1397,6 @@ router.delete("/learning/subjects/:subjectId", async (req, res) => {
         targetId: subjectId,
         description: `Deleted empty course "${course.name}".`,
         details: {
-          semester_id: course.semester_id,
           name: course.name,
           lesson_count: 0,
         },
@@ -1540,7 +1456,7 @@ router.post(
           const [subjects] = await connection.execute(
             `
               SELECT id
-              FROM semester_subjects
+              FROM learning_courses
               WHERE id = ?
               FOR UPDATE
             `,
@@ -1695,7 +1611,7 @@ router.put(
           const [subjects] = await connection.execute(
             `
               SELECT id
-              FROM semester_subjects
+              FROM learning_courses
               WHERE id = ?
               FOR UPDATE
             `,

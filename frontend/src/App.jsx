@@ -89,7 +89,7 @@ function App() {
     if (path.startsWith("/learn/topic/"))
       return "Study the lesson and practice in the editor";
     if (path.startsWith("/learn"))
-      return "Explore semester-wise learning and guided coding";
+      return "Explore courses and learn through guided coding";
     if (path.startsWith("/contests/"))
       return "View the contest schedule and assigned problems";
     if (path.startsWith("/contests"))

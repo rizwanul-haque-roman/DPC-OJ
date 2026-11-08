@@ -44,15 +44,13 @@ async function requireUnlockedTopic(req, res, next) {
           ss.editor_message
 
         FROM learn_topics AS lt
-        INNER JOIN semester_subjects AS ss
+        INNER JOIN learning_courses AS ss
           ON ss.id = lt.subject_id
-        INNER JOIN semesters AS s
-          ON s.id = ss.semester_id
 
         WHERE lt.id = ?
           AND lt.status = 'published'
           AND COALESCE(ss.is_placeholder, 0) = 0
-          AND s.is_active = 1
+          AND ss.is_active = 1
 
         LIMIT 1
       `,
@@ -128,90 +126,21 @@ async function requireUnlockedTopic(req, res, next) {
   }
 }
 
-// GET all semesters with their assigned course names.
-// Course names include placeholders so the semester roadmap
-// can show planned courses without exposing lesson content.
-router.get("/semesters", async (req, res) => {
+// List independent courses. Placeholders remain visible as coming soon.
+router.get("/subjects", async (req, res) => {
   try {
-    const [semesters] = await db.execute(
-      `
-        SELECT
-          id,
-          number,
-          title,
-          description,
-          is_active
-        FROM semesters
-        ORDER BY number ASC, id ASC
-      `,
-    );
-
-    const [courses] = await db.execute(
-      `
-        SELECT
-          id,
-          semester_id,
-          name
-        FROM semester_subjects
-        ORDER BY semester_id ASC, id ASC
-      `,
-    );
-
-    const coursesBySemester = new Map();
-
-    for (const course of courses) {
-      const semesterId = Number(course.semester_id);
-
-      if (!coursesBySemester.has(semesterId)) {
-        coursesBySemester.set(semesterId, []);
-      }
-
-      coursesBySemester.get(semesterId).push(course.name);
-    }
-
-    return res.json(
-      semesters.map((semester) => {
-        const courseNames =
-          coursesBySemester.get(Number(semester.id)) || [];
-
-        return {
-          ...semester,
-          course_names: courseNames,
-          course_count: courseNames.length,
-        };
-      }),
-    );
-  } catch (err) {
-    console.error("GET /semesters error:", err);
-
-    return res.status(500).json({
-      error: "Failed to fetch semesters.",
-    });
-  }
-});
-
-// GET subjects for a semester
-router.get("/semesters/:semesterId/subjects", async (req, res) => {
-  try {
-    const { semesterId } = req.params;
-
-    const [rows] = await db.query(
-      `
-        SELECT *
-        FROM semester_subjects
-        WHERE semester_id = ?
-        ORDER BY id ASC
-      `,
-      [semesterId],
-    );
-
+    const [rows] = await db.execute(`
+      SELECT id, name, language, description, is_placeholder,
+             execution_mode, default_language, editor_enabled,
+             run_enabled, editor_message
+      FROM learning_courses
+      WHERE is_active = 1
+      ORDER BY name ASC, id ASC
+    `);
     return res.json(rows);
-  } catch (err) {
-    console.error("GET /semesters/:semesterId/subjects error:", err);
-
-    return res.status(500).json({
-      error: "Failed to fetch subjects",
-    });
+  } catch (error) {
+    console.error("Learning course list error:", error);
+    return res.status(500).json({ error: "Unable to load learning courses." });
   }
 });
 
@@ -248,10 +177,8 @@ router.get(
             END AS completed
 
           FROM learn_topics AS lt
-          INNER JOIN semester_subjects AS ss
+          INNER JOIN learning_courses AS ss
             ON ss.id = lt.subject_id
-          INNER JOIN semesters AS s
-            ON s.id = ss.semester_id
           LEFT JOIN topic_progress AS tp
             ON tp.topic_id = lt.id
             AND tp.user_id = ?
@@ -259,7 +186,7 @@ router.get(
           WHERE lt.subject_id = ?
             AND lt.status = 'published'
             AND COALESCE(ss.is_placeholder, 0) = 0
-            AND s.is_active = 1
+            AND ss.is_active = 1
 
           ORDER BY lt.order_index ASC, lt.id ASC
         `,
