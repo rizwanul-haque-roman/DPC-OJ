@@ -170,7 +170,7 @@ router.get(
         `
           SELECT
             p.id,
-            p.title,
+            COALESCE(NULLIF(TRIM(cp.display_title), ''), p.title) AS title,
             p.statement,
             p.input_format,
             p.output_format,
@@ -349,7 +349,7 @@ router.get("/:id/leaderboard", async (req, res) => {
       `
       SELECT
         p.id AS problem_id,
-        p.title,
+        COALESCE(NULLIF(TRIM(cp.display_title), ''), p.title) AS title,
         cp.serial_letter
       FROM contest_problems AS cp
       INNER JOIN problems AS p
@@ -579,16 +579,20 @@ router.get("/:id", async (req, res) => {
 
     const [problems] = await db.execute(
       `
-        SELECT
-          cp.serial_letter,
-          p.id,
-          p.title,
-          p.difficulty
-        FROM contest_problems AS cp
-        INNER JOIN problems AS p
-          ON cp.problem_id = p.id
-        WHERE cp.contest_id = ? AND cp.withdrawn_at IS NULL
-        ORDER BY cp.serial_letter ASC
+      SELECT
+        cp.serial_letter,
+        p.id,
+        COALESCE(
+          NULLIF(TRIM(cp.display_title), ''),
+          p.title
+        ) AS title,
+        cp.display_title,
+        p.difficulty
+      FROM contest_problems AS cp
+      INNER JOIN problems AS p
+        ON cp.problem_id = p.id
+      WHERE cp.contest_id = ? AND cp.withdrawn_at IS NULL
+      ORDER BY cp.serial_letter ASC
       `,
       [contestId],
     );
