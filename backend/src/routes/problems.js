@@ -102,6 +102,9 @@ router.get("/", optionalAuth, async (req, res) => {
       filterValues.push(subjectId);
     }
 
+    const summaryWhere = `WHERE ${conditions.join(" AND ")}`;
+    const summaryValues = [...filterValues];
+
     if (difficulty !== "all") {
       conditions.push("LOWER(TRIM(p.difficulty)) = ?");
       filterValues.push(difficulty);
@@ -186,17 +189,19 @@ router.get("/", optionalAuth, async (req, res) => {
         SELECT
           COUNT(*) AS total,
           COALESCE(
-            SUM(LOWER(TRIM(difficulty)) = 'easy'), 0
+            SUM(LOWER(TRIM(p.difficulty)) = 'easy'), 0
           ) AS easy,
           COALESCE(
-            SUM(LOWER(TRIM(difficulty)) = 'medium'), 0
+            SUM(LOWER(TRIM(p.difficulty)) = 'medium'), 0
           ) AS medium,
           COALESCE(
-            SUM(LOWER(TRIM(difficulty)) = 'hard'), 0
+            SUM(LOWER(TRIM(p.difficulty)) = 'hard'), 0
           ) AS hard
-        FROM problems
-        WHERE is_public = true
-      `),
+        FROM problems AS p
+        ${summaryWhere}
+        `,
+        summaryValues,
+      ),
     ]);
 
     const total = Number(countRows[0].total);
