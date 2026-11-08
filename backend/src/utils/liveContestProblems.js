@@ -35,6 +35,7 @@ async function changeContestProblem({
   action,
   reason,
   expectedRevision,
+  displayTitle,
 }) {
   const contestId = positive(rawContestId, "contest ID");
   const problemId = positive(rawProblemId, "problem ID");
@@ -56,6 +57,14 @@ async function changeContestProblem({
 
   if (!["add", "withdraw"].includes(action)) {
     throw new Error("Unsupported action.");
+  }
+
+  let normalizedTitle;
+  if (action === "add" && displayTitle !== undefined) {
+    if (typeof displayTitle !== "string" || displayTitle.trim().length > 255) {
+      throw fail(400, "Contest problem name must be a string of at most 255 characters.");
+    }
+    normalizedTitle = displayTitle.trim() || null;
   }
 
   const connection = await db.getConnection();
@@ -84,7 +93,7 @@ async function changeContestProblem({
     }
 
     const [assigned] = await connection.execute(
-      `SELECT problem_id, serial_letter, withdrawn_at
+      `SELECT problem_id, serial_letter, display_title, withdrawn_at
        FROM contest_problems
        WHERE contest_id = ?
        ORDER BY serial_letter ASC
@@ -105,7 +114,13 @@ async function changeContestProblem({
       throw fail(404, "Problem not found.");
     }
 
-    const title = problemRows[0].title;
+    const originalTitle = problemRows[0].title;
+    const savedTitle = action === "add"
+      ? normalizedTitle === undefined
+        ? existing?.display_title ?? null
+        : normalizedTitle
+      : existing?.display_title ?? null;
+    const title = savedTitle?.trim() || originalTitle;
 
     const [clockRows] = await connection.execute(
       "SELECT NOW(3) AS changed_at",
@@ -130,6 +145,7 @@ async function changeContestProblem({
       event = "contest_problem_withdrawn";
 
       before = {
+        display_title: existing.display_title,
         withdrawn_at: existing.withdrawn_at,
         withdrawn_reason: null,
         withdrawn_by: null,
@@ -172,12 +188,14 @@ async function changeContestProblem({
         event = "contest_problem_restored";
 
         before = {
+          display_title: existing.display_title,
           withdrawn_at: existing.withdrawn_at,
           withdrawn_reason: null,
           withdrawn_by: null,
         };
 
         after = {
+          display_title: savedTitle,
           withdrawn_at: null,
           withdrawn_reason: null,
           withdrawn_by: null,
@@ -185,9 +203,9 @@ async function changeContestProblem({
 
         await connection.execute(
           `UPDATE contest_problems
-           SET withdrawn_at = NULL, withdrawn_reason = NULL, withdrawn_by = NULL
+           SET withdrawn_at = NULL, withdrawn_reason = NULL, withdrawn_by = NULL, display_title = ?
            WHERE contest_id = ? AND problem_id = ?`,
-          [contestId, problemId],
+          [savedTitle, contestId, problemId],
         );
       } else {
         const used = new Set(assigned.map((row) => row.serial_letter));
@@ -211,15 +229,16 @@ async function changeContestProblem({
         };
 
         after = {
+          display_title: savedTitle,
           assigned: true,
           serial_letter: letter,
         };
 
         await connection.execute(
           `INSERT INTO contest_problems
-            (contest_id, problem_id, serial_letter)
-           VALUES (?, ?, ?)`,
-          [contestId, problemId, letter],
+            (contest_id, problem_id, serial_letter, display_title)
+           VALUES (?, ?, ?, ?)`,
+          [contestId, problemId, letter, savedTitle],
         );
       }
     }
@@ -256,6 +275,8 @@ async function changeContestProblem({
       details: {
         problem_id: problemId,
         problem_title: title,
+        original_problem_title: originalTitle,
+        display_title: savedTitle,
         serial_letter: letter,
         revision,
         changed_at: changedAt,
@@ -291,6 +312,8 @@ async function changeContestProblem({
       contest_id: contestId,
       problem_id: problemId,
       serial_letter: letter,
+      title,
+      display_title: savedTitle,
       revision,
     };
   } catch (error) {

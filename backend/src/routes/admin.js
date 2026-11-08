@@ -906,7 +906,9 @@ router.get("/contests/:contestId/problems", async (req, res) => {
     const [rows] = await db.execute(
       `SELECT
         p.id,
-        p.title,
+        COALESCE(NULLIF(TRIM(cp.display_title), ''), p.title) AS title,
+        p.title AS original_title,
+        cp.display_title,
         p.difficulty,
         p.time_limit_ms,
         p.memory_limit_kb,
@@ -940,6 +942,7 @@ async function handleLiveProblem(req, res, action) {
       action,
       reason: req.body?.reason,
       expectedRevision: req.body?.expected_revision,
+      displayTitle: action === "add" ? req.body?.display_title : undefined,
     });
 
     return res.status(action === "add" ? 201 : 200).json(result);

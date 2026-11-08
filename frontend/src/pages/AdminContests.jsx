@@ -52,6 +52,7 @@ function AdminContests() {
   const [form, setForm] = useState(initialForm);
   const [selectedContestId, setSelectedContestId] = useState("");
   const [selectedProblemId, setSelectedProblemId] = useState("");
+  const [displayTitle, setDisplayTitle] = useState("");
 
   const [loading, setLoading] = useState(true);
   const [assignedLoading, setAssignedLoading] = useState(false);
@@ -125,6 +126,7 @@ function AdminContests() {
     setAssignedProblems([]);
     setAssignmentError("");
     setSelectedProblemId("");
+    setDisplayTitle("");
 
     if (!isAdmin || !selectedContestId) {
       setAssignedLoading(false);
@@ -261,17 +263,20 @@ function AdminContests() {
     if (!selectedContestId || !selectedProblemId || busy || problemActionBusy.current) return;
     const problem=problems.find(item=>String(item.id)===selectedProblemId);
     if (!problem || Number(problem.hidden_test_count)<1) { setError("Choose a problem with hidden test cases.");return; }
+    if (displayTitle.trim().length > 255) { setError("Contest problem name must be at most 255 characters."); return; }
+    const contestProblemTitle = displayTitle.trim() || problem.title;
     const withdrawn=assignedProblems.find(item=>Number(item.id)===Number(selectedProblemId)&&item.withdrawn_at);
     const reason=window.prompt(withdrawn ? "Reason for restoring this problem (students will see it):" : "Reason for adding this problem (students will see it):");
     if(reason===null)return;
     if(!reason.trim()||reason.trim().length>1000){setError("Enter a reason between 1 and 1000 characters.");return;}
     const impact=withdrawn ? "Its earlier eligible submissions, points, and penalties will count again. Its original letter is retained." : "Students will see this new problem. Solve time is measured from the original contest start.";
-    if(!window.confirm(`${withdrawn ? "Restore" : "Add"} ${problem.title}?\n\n${impact}\n\nReason: ${reason.trim()}`))return;
+    if(!window.confirm(`${withdrawn ? "Restore" : "Add"} ${contestProblemTitle}?\n\n${impact}\n\nReason: ${reason.trim()}`))return;
     problemActionBusy.current=true;
     try{
       setBusy(true);setError("");setSuccess("");
-      const response=await api.post(`/admin/contests/${selectedContestId}/problems`,{problem_id:Number(selectedProblemId),expected_revision:Number(selectedContest.revision),reason:reason.trim()});
+      const response=await api.post(`/admin/contests/${selectedContestId}/problems`,{problem_id:Number(selectedProblemId),display_title:displayTitle.trim(),expected_revision:Number(selectedContest.revision),reason:reason.trim()});
       setSelectedProblemId("");
+    setDisplayTitle("");
       setAssignmentRefreshKey(value=>value+1);setRefreshKey(value=>value+1);
       setSuccess(response.data.message||"Contest problem updated.");
     }catch(err){
@@ -539,17 +544,21 @@ function AdminContests() {
                   <>
                     <form
                       onSubmit={handleAddProblem}
-                      className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-end"
+                      className="mt-5 flex flex-col gap-4"
                     >
-                      <label className="block flex-1 text-sm text-slate-300">
+                      <label className="block w-full text-sm text-slate-300">
                         Problem bank
                         <select
                           required
                           value={selectedProblemId}
                           disabled={busy}
-                          onChange={(event) =>
-                            setSelectedProblemId(event.target.value)
-                          }
+                          onChange={(event) => {
+                            const id = event.target.value;
+                            setSelectedProblemId(id);
+                            const assigned = assignedProblems.find((item) => String(item.id) === id);
+                            const original = problems.find((item) => String(item.id) === id);
+                            setDisplayTitle(assigned?.title || original?.title || "");
+                          }}
                           className={`mt-2 ${inputClass}`}
                         >
                           <option value="">Select a problem</option>
@@ -571,6 +580,22 @@ function AdminContests() {
                         </select>
                       </label>
 
+                      <label className="block w-full text-sm text-slate-300">
+                        Contest problem name
+                        <input
+                          type="text"
+                          value={displayTitle}
+                          onChange={(event) => setDisplayTitle(event.target.value)}
+                          maxLength={255}
+                          disabled={busy || !selectedProblemId}
+                          placeholder="Leave blank to use the original name"
+                          className={`mt-2 ${inputClass}`}
+                        />
+                        <span className="mt-1 block text-xs text-slate-500">
+                          Only changes the name in this contest.
+                        </span>
+                      </label>
+
                       <button
                         type="submit"
                         disabled={
@@ -578,7 +603,7 @@ function AdminContests() {
                           !selectedProblemId ||
                           (assignedProblems.length >= 26 && !assignedProblems.some(item => String(item.id) === selectedProblemId && item.withdrawn_at))
                         }
-                        className={buttonClass}
+                        className={`${buttonClass} self-start`}
                       >
                         {busy ? "Saving..." : assignedProblems.some(item => String(item.id) === selectedProblemId && item.withdrawn_at) ? "Restore Problem" : "Add Problem"}
                       </button>
@@ -632,6 +657,11 @@ function AdminContests() {
 
                                 <td className="px-4 py-4 text-white">
                                   {problem.title}
+                                  {problem.original_title && problem.original_title !== problem.title && (
+                                    <p className="mt-1 text-xs text-slate-500">
+                                      Original: {problem.original_title}
+                                    </p>
+                                  )}
                                   {problem.withdrawn_at && <span className="ml-2 text-xs font-semibold text-amber-300">Withdrawn — excluded from standings</span>}
                                   {problem.withdrawn_at && <p className="mt-1 text-xs font-normal text-slate-500">{problem.withdrawn_reason}</p>}
                                 </td>
