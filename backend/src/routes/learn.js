@@ -287,35 +287,87 @@ router.get(
   },
 );
 
-// POST mark an unlocked lesson complete for the authenticated user
+// POST mark an unlocked lesson complete only after its practice is solved.
 router.post(
   "/topics/:topicId/complete",
   requireAuth,
   requireUnlockedTopic,
   async (req, res) => {
     const topicId = req.learningTopic.id;
+    const userId = req.user.userId;
+    let connection;
 
     try {
-      await db.execute(
-        `
-          INSERT INTO topic_progress (user_id, topic_id)
-          VALUES (?, ?)
-          ON DUPLICATE KEY UPDATE id = id
-        `,
-        [req.user.userId, topicId],
+      connection = await db.getConnection();
+      await connection.beginTransaction();
+
+      // Serialize completion attempts for this lesson.
+      const [topics] = await connection.execute(
+        "SELECT id FROM learn_topics WHERE id = ? FOR UPDATE",
+        [topicId],
       );
 
+      if (!topics.length) {
+        await connection.rollback();
+        return res.status(404).json({ error: "Lesson not found." });
+      }
+
+      // Match the practice-list policy: public linked problems, and only
+      // Accepted non-contest submissions by the authenticated user count.
+      const [unsolvedProblems] = await connection.execute(
+        `
+        SELECT DISTINCT p.id, p.title
+        FROM learning_topic_problems AS ltp
+        INNER JOIN problems AS p ON p.id = ltp.problem_id
+        WHERE ltp.topic_id = ?
+          AND p.is_public = 1
+          AND NOT EXISTS (
+            SELECT 1
+            FROM submissions AS submission
+            WHERE submission.problem_id = p.id
+              AND submission.user_id = ?
+              AND submission.verdict = 'Accepted'
+              AND submission.contest_id IS NULL
+          )
+        ORDER BY p.id ASC
+        `,
+        [topicId, userId],
+      );
+
+      if (unsolvedProblems.length > 0) {
+        await connection.rollback();
+        return res.status(409).json({
+          error: "Solve all related practice problems with an Accepted verdict before marking this lesson complete.",
+          code: "LESSON_PRACTICE_INCOMPLETE",
+          topic_id: topicId,
+          remaining_count: unsolvedProblems.length,
+          unsolved_problems: unsolvedProblems,
+        });
+      }
+
+      await connection.execute(
+        `
+        INSERT INTO topic_progress (user_id, topic_id)
+        VALUES (?, ?)
+        ON DUPLICATE KEY UPDATE id = id
+        `,
+        [userId, topicId],
+      );
+
+      await connection.commit();
       return res.json({
         topic_id: topicId,
         completed: true,
         message: "Topic marked as complete.",
       });
     } catch (err) {
+      if (connection) {
+        await connection.rollback().catch(() => {});
+      }
       console.error("Complete learning topic error:", err);
-
-      return res.status(500).json({
-        error: "Failed to mark topic complete.",
-      });
+      return res.status(500).json({ error: "Failed to mark topic complete." });
+    } finally {
+      connection?.release();
     }
   },
 );
