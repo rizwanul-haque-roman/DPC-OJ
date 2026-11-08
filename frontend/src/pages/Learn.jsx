@@ -1,9 +1,50 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../api/axios";
 
 const COURSE_COLUMNS =
   "xl:grid-cols-[minmax(0,1fr)_130px_100px_190px_180px]";
+
+const COURSES_PER_PAGE = 10;
+const FILTER_CLASS = "w-full rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2.5 text-sm text-slate-200 outline-none transition focus:border-cyan-400/60 focus:ring-2 focus:ring-cyan-400/10 disabled:opacity-50";
+
+function getCourseState(subject) {
+  if (subject.lessonError) return "unavailable";
+  if (subject.isPlaceholder || !subject.lessonCount || subject.startTopicId == null) {
+    return "coming-soon";
+  }
+  if (subject.completedCount >= subject.lessonCount) return "completed";
+  return subject.completedCount > 0 ? "in-progress" : "not-started";
+}
+
+function selectCourses(subjects, search, progressFilter, availability, sortBy) {
+  const term = search.trim().toLocaleLowerCase();
+  const selected = subjects.filter((subject) => {
+    const state = getCourseState(subject);
+    const available = !["coming-soon", "unavailable"].includes(state);
+    return String(subject.name || "").toLocaleLowerCase().includes(term) &&
+      (progressFilter === "all" || state === progressFilter) &&
+      (availability === "all" ||
+        (availability === "available" && available) ||
+        availability === state);
+  });
+  return selected.sort((a, b) => {
+    const nameOrder = String(a.name || "").localeCompare(String(b.name || ""), undefined, {
+      sensitivity: "base", numeric: true,
+    }) || Number(a.id) - Number(b.id);
+    if (sortBy === "name-desc") return -nameOrder;
+    if (["progress-desc", "progress-asc"].includes(sortBy)) {
+      const availableA = !["coming-soon", "unavailable"].includes(getCourseState(a));
+      const availableB = !["coming-soon", "unavailable"].includes(getCourseState(b));
+      if (availableA !== availableB) return availableA ? -1 : 1;
+      const ratioA = a.lessonCount ? a.completedCount / a.lessonCount : 0;
+      const ratioB = b.lessonCount ? b.completedCount / b.lessonCount : 0;
+      const difference = sortBy === "progress-desc" ? ratioB - ratioA : ratioA - ratioB;
+      return difference || nameOrder;
+    }
+    return nameOrder;
+  });
+}
 
 function CourseRow({ subject, onRetry }) {
   const hasLessons =
@@ -25,13 +66,13 @@ function CourseRow({ subject, onRetry }) {
       )
     : 0;
 
-  const statusLabel = subject.lessonError
-    ? "Unavailable"
-    : !hasLessons
-      ? "Coming soon"
-      : isComplete
-        ? "Completed"
-        : "Ready";
+  const statusLabel = {
+    unavailable: "Unavailable",
+    "coming-soon": "Coming soon",
+    completed: "Completed",
+    "in-progress": "In progress",
+    "not-started": "Not started",
+  }[getCourseState(subject)];
 
   const actionLabel = isComplete
     ? "Review Lessons"
@@ -212,9 +253,25 @@ function Learn() {
   const [subjectError, setSubjectError] = useState("");
   const [subjectRetry, setSubjectRetry] = useState(0);
   const [authRevision, setAuthRevision] = useState(0);
+  const [hasToken, setHasToken] = useState(() => Boolean(localStorage.getItem("token")));
+  const [search, setSearch] = useState("");
+  const [progressFilter, setProgressFilter] = useState("all");
+  const [availability, setAvailability] = useState("all");
+  const [sortBy, setSortBy] = useState("name-asc");
+  const [page, setPage] = useState(1);
+  const [coursesPerPage, setCoursesPerPage] = useState(10);
 
   useEffect(() => {
-    const updateAuth = () => setAuthRevision((value) => value + 1);
+    const updateAuth = () => {
+      const signedIn = Boolean(localStorage.getItem("token"));
+      setHasToken(signedIn);
+      if (!signedIn) {
+        setProgressFilter("all");
+        setSortBy((current) => current.startsWith("progress-") ? "name-asc" : current);
+      }
+      setPage(1);
+      setAuthRevision((value) => value + 1);
+    };
     window.addEventListener("authChanged", updateAuth);
     window.addEventListener("storage", updateAuth);
     return () => {
@@ -339,6 +396,29 @@ function Learn() {
     return () => controller.abort();
   }, [subjectRetry, authRevision]);
 
+  const filteredCourses = useMemo(
+    () => selectCourses(subjects, search, progressFilter, availability, sortBy),
+    [subjects, search, progressFilter, availability, sortBy],
+  );
+  const pageCount = Math.max(1, Math.ceil(filteredCourses.length / coursesPerPage),);
+  const currentPage = Math.min(page, pageCount);
+  const offset = (currentPage - 1) * COURSES_PER_PAGE;
+  const visibleCourses = filteredCourses.slice(offset,offset + coursesPerPage,);
+  const inProgressCount = subjects.filter((subject) => getCourseState(subject) === "in-progress").length;
+
+  function updateControl(setter, value) {
+    setter(value);
+    setPage(1);
+  }
+
+  function resetControls() {
+    setSearch("");
+    setProgressFilter("all");
+    setAvailability("all");
+    setSortBy("name-asc");
+    setPage(1);
+  }
+
   const retrySubjects = () => setSubjectRetry((value) => value + 1);
 
   return (
@@ -370,6 +450,105 @@ function Learn() {
           )}
         </div>
 
+        <div className="mb-5 space-y-3 border-y border-white/10 py-4">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(0,2fr)_1fr_1fr_1fr]">
+            <label className="block text-xs text-slate-400">
+              Search courses
+              <input
+                type="search"
+                value={search}
+                maxLength={100}
+                onChange={(event) => updateControl(setSearch, event.target.value)}
+                placeholder="Search by course name..."
+                className={`mt-2 ${FILTER_CLASS}`}
+              />
+            </label>
+            <label className="block text-xs text-slate-400">
+              Learning progress
+              <select
+                value={progressFilter}
+                disabled={!hasToken}
+                onChange={(event) => updateControl(setProgressFilter, event.target.value)}
+                className={`mt-2 ${FILTER_CLASS}`}
+              >
+                <option value="all">All progress</option>
+                <option value="not-started">Not started</option>
+                <option value="in-progress">In progress</option>
+                <option value="completed">Completed</option>
+              </select>
+            </label>
+            <label className="block text-xs text-slate-400">
+              Availability
+              <select value={availability} onChange={(event) => updateControl(setAvailability, event.target.value)} className={`mt-2 ${FILTER_CLASS}`}>
+                <option value="all">All courses</option>
+                <option value="available">Ready to learn</option>
+                <option value="coming-soon">Coming soon</option>
+                <option value="unavailable">Unavailable</option>
+              </select>
+            </label>
+            <label className="block text-xs text-slate-400">
+              Sort by
+              <select value={sortBy} onChange={(event) => updateControl(setSortBy, event.target.value)} className={`mt-2 ${FILTER_CLASS}`}>
+                <option value="name-asc">Name: A–Z</option>
+                <option value="name-desc">Name: Z–A</option>
+                <option value="progress-desc" disabled={!hasToken}>Progress: highest first</option>
+                <option value="progress-asc" disabled={!hasToken}>Progress: lowest first</option>
+              </select>
+            </label>
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p role="status" className="text-xs text-slate-400">
+              {subjectLoading ? "Loading courses..." : subjectError ? "Unable to load results." :
+                `Showing ${filteredCourses.length ? offset + 1 : 0}–${Math.min(offset + COURSES_PER_PAGE, filteredCourses.length)} of ${filteredCourses.length} matching courses (${subjects.length} total)`}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {hasToken && inProgressCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => updateControl(setProgressFilter, "in-progress")}
+                  aria-pressed={progressFilter === "in-progress"}
+                  className={[
+                    "rounded-lg border px-3 py-1.5 text-xs transition",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/50",
+                    progressFilter === "in-progress"
+                      ? "border-cyan-400/40 bg-cyan-400/15 text-cyan-200"
+                      : "border-white/10 bg-transparent text-slate-400 hover:border-white/20 hover:bg-white/5 hover:text-slate-200",
+                  ].join(" ")}
+                >
+                  In progress ({inProgressCount})
+                </button>
+              )}
+              <label className="flex items-center gap-2 text-xs text-slate-400">
+                Courses per page
+
+                <select
+                  value={coursesPerPage}
+                  onChange={(event) => {
+                    const value = Number(event.target.value);
+
+                    if (![10, 25, 50].includes(value)) return;
+
+                    setCoursesPerPage(value);
+                    setPage(1);
+                  }}
+                  className="rounded-lg border border-white/10 bg-slate-950 px-2 py-1.5 text-xs text-slate-200 outline-none focus:border-cyan-400/60"
+                >
+                  <option value={5}>5</option>
+                  <option value={10}>10</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                </select>
+              </label>
+              <button type="button" onClick={resetControls} className="rounded-lg border border-white/10 px-3 py-1.5 text-xs text-slate-300 hover:bg-white/5">
+                Reset filters
+              </button>
+            </div>
+          </div>
+          {!hasToken && (
+            <p className="text-xs text-slate-500"><Link to="/login" className="text-cyan-300 hover:underline">Log in</Link> to filter courses by your learning progress.</p>
+          )}
+        </div>
+
         {subjectLoading ? (
           <div
             role="status"
@@ -396,6 +575,11 @@ function Learn() {
           <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-4 text-sm leading-7 text-slate-400">
             No learning courses are available yet.
           </div>
+        ) : filteredCourses.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-white/10 p-6 text-sm text-slate-400">
+            <p>No courses match your search and filters.</p>
+            <button type="button" onClick={resetControls} className="mt-3 text-cyan-300 hover:underline">Clear search and filters</button>
+          </div>
         ) : (
           <>
             <div
@@ -415,7 +599,7 @@ function Learn() {
             </div>
 
             <div className="space-y-3">
-              {subjects.map((subject) => (
+              {visibleCourses.map((subject) => (
                 <CourseRow
                   key={subject.id}
                   subject={subject}
@@ -423,6 +607,15 @@ function Learn() {
                 />
               ))}
             </div>
+            {pageCount > 1 && (
+              <nav aria-label="Course pages" className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4">
+                <span className="text-xs text-slate-400">Page {currentPage} of {pageCount}</span>
+                <div className="flex gap-2">
+                  <button type="button" disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)} className="rounded-xl border border-white/10 px-3 py-2 text-xs text-slate-300 hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-40">Previous</button>
+                  <button type="button" disabled={currentPage === pageCount} onClick={() => setPage(currentPage + 1)} className="rounded-xl border border-white/10 px-3 py-2 text-xs text-slate-300 hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-40">Next</button>
+                </div>
+              </nav>
+            )}
           </>
         )}
       </section>
