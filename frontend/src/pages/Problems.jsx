@@ -221,45 +221,57 @@ function Problems() {
         {[
           {
             label: "Total Problems",
+            difficulty: "all",
             value: summary?.total,
             color: "text-white",
             description: "All available coding challenges",
           },
           {
             label: "Easy",
+            difficulty: "easy",
             value: summary?.easy,
             color: "text-emerald-300",
             description: "Warm-up and beginner-friendly",
           },
           {
             label: "Medium",
+            difficulty: "medium",
             value: summary?.medium,
             color: "text-amber-300",
             description: "Core problem-solving practice",
           },
           {
             label: "Hard",
+            difficulty: "hard",
             value: summary?.hard,
             color: "text-rose-300",
             description: "Advanced challenge mode",
           },
         ].map((stat) => (
-          <div
+          <button
             key={stat.label}
-            className="rounded-2xl border border-white/10 bg-slate-900/50 p-4 shadow-lg backdrop-blur-xl sm:rounded-3xl sm:p-5"
+            type="button"
+            onClick={() => changeFilter("difficulty", stat.difficulty)}
+            aria-pressed={query.difficulty === stat.difficulty}
+            aria-label={`Show ${stat.difficulty === "all" ? "all" : stat.label.toLowerCase()} problems`}
+            className={`cursor-pointer rounded-2xl border p-4 text-left shadow-lg backdrop-blur-xl transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 sm:rounded-3xl sm:p-5 ${
+              query.difficulty === stat.difficulty
+                ? "border-cyan-400/60 bg-cyan-400/10 ring-1 ring-cyan-400/30"
+                : "border-white/10 bg-slate-900/50 hover:border-white/25 hover:bg-slate-800/60"
+            }`}
           >
-            <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
+            <span className="block text-xs font-medium uppercase tracking-wide text-slate-400">
               {stat.label}
-            </p>
+            </span>
 
-            <h3 className={`mt-3 text-3xl font-bold ${stat.color}`}>
+            <span className={`mt-3 block text-3xl font-bold ${stat.color}`}>
               {stat.value ?? "—"}
-            </h3>
+            </span>
 
-            <p className="mt-2 hidden text-sm text-slate-400 sm:block">
+            <span className="mt-2 hidden text-sm text-slate-400 sm:block">
               {stat.description}
-            </p>
-          </div>
+            </span>
+          </button>
         ))}
       </section>
 
