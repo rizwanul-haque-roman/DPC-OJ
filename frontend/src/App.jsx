@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Routes, Route, useLocation } from "react-router-dom";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
@@ -26,6 +27,8 @@ import ResetPassword from "./pages/ResetPassword";
 
 function App() {
   const location = useLocation();
+  const [learningCourse, setLearningCourse] = useState(null);
+  const courseTitleContext = location.pathname + location.search;
 
   const getPageTitle = () => {
     const path = location.pathname;
@@ -47,7 +50,11 @@ function App() {
     if (path.startsWith("/verify-email")) return "Verify your email";
     if (path.startsWith("/register")) return "Register";
     if (path.startsWith("/submissions")) return "Submissions";
-    if (path.startsWith("/learn/topic/")) return "Learn Topic";
+    if (path.startsWith("/learn/topic/")) {
+      return learningCourse?.context === courseTitleContext
+        ? learningCourse.title || "Course"
+        : "Course";
+    }
     if (path.startsWith("/learn")) return "Learning Hub";
     if (path.startsWith("/contests/")) return "Contest Details";
     if (path.startsWith("/contests"))
@@ -162,7 +169,15 @@ function App() {
           <Route path="/admin/audit-logs" element={<AdminAuditLogs />} />
           <Route path="/admin/users" element={<AdminUsers />} />
           <Route path="/learn" element={<Learn />} />
-          <Route path="/learn/topic/:topicId" element={<LearnTopic />} />
+          <Route
+            path="/learn/topic/:topicId"
+            element={
+              <LearnTopic
+                onCourseTitleChange={setLearningCourse}
+                courseTitleContext={courseTitleContext}
+              />
+            }
+          />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/verify-email" element={<VerifyEmail />} />

@@ -132,7 +132,7 @@ function LockedEditorPlaceholder() {
   );
 }
 
-function LearnTopic() {
+function LearnTopic({ onCourseTitleChange, courseTitleContext }) {
   const { topicId } = useParams();
   const [searchParams] = useSearchParams();
   const subjectId = searchParams.get("subject") || "1";
@@ -190,6 +190,22 @@ function LearnTopic() {
   const runEnabled =
     Number(topic?.run_enabled) === 1 ||
     topic?.run_enabled === true;
+
+  useEffect(() => {
+    if (!onCourseTitleChange) return;
+
+    onCourseTitleChange({
+      context: courseTitleContext,
+      title: isReady && typeof topic?.subject_name === "string"
+        ? topic.subject_name.trim()
+        : "",
+    });
+  }, [
+    onCourseTitleChange,
+    courseTitleContext,
+    isReady,
+    topic?.subject_name,
+  ]);
 
   useEffect(() => {
     const controller = new AbortController();
