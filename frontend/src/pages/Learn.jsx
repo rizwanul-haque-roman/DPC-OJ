@@ -522,7 +522,6 @@ function Learn() {
                 <option value="all">All courses</option>
                 <option value="available">Ready to learn</option>
                 <option value="coming-soon">Coming soon</option>
-                <option value="unavailable">Unavailable</option>
               </select>
             </label>
             <label className="block text-xs text-slate-400">
