@@ -1857,7 +1857,7 @@ router.post("/learning/topics", async (req, res) => {
     const [subjects] = await connection.execute(
       `
         SELECT id, name
-        FROM semester_subjects
+        FROM learning_courses
         WHERE id = ?
         FOR UPDATE
       `,

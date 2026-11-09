@@ -662,7 +662,7 @@ export default function AdminProblems() {
                 <option value="">No subject</option>
                 {subjects.map((subject) => (
                   <option key={subject.id} value={subject.id}>
-                    Semester {subject.semester_no} — {subject.name}
+                    {subject.name}
                   </option>
                 ))}
               </select>

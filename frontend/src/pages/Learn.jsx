@@ -1,30 +1,75 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../api/axios";
 
 const COURSE_COLUMNS =
   "xl:grid-cols-[minmax(0,1fr)_130px_100px_190px_180px]";
 
-function semesterLabel(number) {
-  const semester = Number(number);
-  const year = Math.ceil(semester / 2);
+const PAGE_SIZE_OPTIONS = [10, 25, 50];
+const FILTER_CLASS = "w-full rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2.5 text-sm text-slate-200 outline-none transition focus:border-cyan-400/60 focus:ring-2 focus:ring-cyan-400/10 disabled:opacity-50";
 
-  const yearLabels = {
-    1: "1st",
-    2: "2nd",
-    3: "3rd",
-    4: "4th",
+function getCourseState(subject) {
+  if (subject.lessonError) return "unavailable";
+  if (subject.isPlaceholder || !subject.lessonCount || subject.startTopicId == null) {
+    return "coming-soon";
+  }
+  if (subject.completedCount >= subject.lessonCount) return "completed";
+  return subject.completedCount > 0 ? "in-progress" : "not-started";
+}
+
+function selectCourses(subjects, search, progressFilter, availability, sortBy) {
+  const term = search.trim().toLocaleLowerCase();
+  const selected = subjects.filter((subject) => {
+    const state = getCourseState(subject);
+    const available = !["coming-soon", "unavailable"].includes(state);
+    return String(subject.name || "").toLocaleLowerCase().includes(term) &&
+      (progressFilter === "all" || state === progressFilter) &&
+      (availability === "all" ||
+        (availability === "available" && available) ||
+        availability === state);
+  });
+  return selected.sort((a, b) => {
+    const nameOrder = String(a.name || "").localeCompare(String(b.name || ""), undefined, {
+      sensitivity: "base", numeric: true,
+    }) || Number(a.id) - Number(b.id);
+    if (sortBy === "name-desc") return -nameOrder;
+    if (["progress-desc", "progress-asc"].includes(sortBy)) {
+      const availableA = !["coming-soon", "unavailable"].includes(getCourseState(a));
+      const availableB = !["coming-soon", "unavailable"].includes(getCourseState(b));
+      if (availableA !== availableB) return availableA ? -1 : 1;
+      const ratioA = a.lessonCount ? a.completedCount / a.lessonCount : 0;
+      const ratioB = b.lessonCount ? b.completedCount / b.lessonCount : 0;
+      const difference = sortBy === "progress-desc" ? ratioB - ratioA : ratioA - ratioB;
+      return difference || nameOrder;
+    }
+    return nameOrder;
+  });
+}
+
+function getCoursePage(items, requestedPage, requestedPageSize) {
+  const parsedSize = Number(requestedPageSize);
+  const pageSize = PAGE_SIZE_OPTIONS.includes(parsedSize) ? parsedSize : 10;
+  const pageCount = Math.max(1, Math.ceil(items.length / pageSize));
+  const parsedPage = Number(requestedPage);
+  const safePage = Number.isFinite(parsedPage) ? Math.trunc(parsedPage) : 1;
+  const currentPage = Math.max(1, Math.min(safePage, pageCount));
+  const offset = (currentPage - 1) * pageSize;
+  const visibleCourses = items.slice(offset, offset + pageSize);
+  return {
+    pageSize,
+    pageCount,
+    currentPage,
+    offset,
+    visibleCourses,
+    from: visibleCourses.length ? offset + 1 : 0,
+    to: visibleCourses.length ? offset + visibleCourses.length : 0,
+    total: items.length,
   };
-
-  return `${yearLabels[year] || `${year}th`} year - Semester ${semester}`;
 }
 
 function CourseRow({ subject, onRetry }) {
-  const hasLessons =
-    !subject.isPlaceholder &&
-    subject.lessonCount > 0 &&
-    subject.startTopicId !== null &&
-    !subject.lessonError;
+  const courseState = getCourseState(subject);
+  const hasLessons = !["coming-soon", "unavailable"].includes(courseState);
 
   const isComplete =
     hasLessons &&
@@ -39,13 +84,13 @@ function CourseRow({ subject, onRetry }) {
       )
     : 0;
 
-  const statusLabel = subject.lessonError
-    ? "Unavailable"
-    : !hasLessons
-      ? "Coming soon"
-      : isComplete
-        ? "Completed"
-        : "Ready";
+  const statusLabel = {
+    unavailable: "Unavailable",
+    "coming-soon": "Coming soon",
+    completed: "Completed",
+    "in-progress": "In progress",
+    "not-started": "Not started",
+  }[getCourseState(subject)];
 
   const actionLabel = isComplete
     ? "Review Lessons"
@@ -221,89 +266,52 @@ function CourseRow({ subject, onRetry }) {
 }
 
 function Learn() {
-  const [semesters, setSemesters] = useState([]);
-  const [selectedSemester, setSelectedSemester] = useState(null);
   const [subjects, setSubjects] = useState([]);
-
-  const [loading, setLoading] = useState(true);
-  const [subjectLoading, setSubjectLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [subjectLoading, setSubjectLoading] = useState(true);
   const [subjectError, setSubjectError] = useState("");
-
-  const [semesterRetry, setSemesterRetry] = useState(0);
   const [subjectRetry, setSubjectRetry] = useState(0);
-
-  const selectedSemesterId = selectedSemester?.id ?? null;
-
-  useEffect(() => {
-    const controller = new AbortController();
-
-    async function fetchSemesters() {
-      setLoading(true);
-      setError("");
-
-      try {
-        const response = await api.get("/learn/semesters", {
-          signal: controller.signal,
-        });
-
-        if (controller.signal.aborted) return;
-
-        if (!Array.isArray(response.data)) {
-          throw new Error("Unexpected semester response.");
-        }
-
-        const availableSemesters = response.data
-          .filter((semester) => Number(semester.is_active) === 1)
-          .sort((a, b) => Number(a.number) - Number(b.number));
-
-        setSemesters(availableSemesters);
-
-        setSelectedSemester((previous) => {
-          const existingSelection = availableSemesters.find(
-            (semester) => String(semester.id) === String(previous?.id),
-          );
-
-          return existingSelection || availableSemesters[0] || null;
-        });
-      } catch (err) {
-        if (controller.signal.aborted) return;
-
-        setError(
-          err.response?.data?.error ||
-            err.message ||
-            "Failed to load semesters.",
-        );
-      } finally {
-        if (!controller.signal.aborted) {
-          setLoading(false);
-        }
-      }
-    }
-
-    fetchSemesters();
-
-    return () => controller.abort();
-  }, [semesterRetry]);
+  const [authRevision, setAuthRevision] = useState(0);
+  const [hasToken, setHasToken] = useState(() => Boolean(localStorage.getItem("token")));
+  const [search, setSearch] = useState("");
+  const [progressFilter, setProgressFilter] = useState("all");
+  const [availability, setAvailability] = useState("all");
+  const [sortBy, setSortBy] = useState("name-asc");
+  const [page, setPage] = useState(1);
+  const [coursesPerPage, setCoursesPerPage] = useState(10);
 
   useEffect(() => {
-    if (selectedSemesterId === null) {
+    const updateAuth = (event) => {
+      if (event?.type === "storage" && event.key !== null && !["token", "user"].includes(event.key)) return;
       setSubjects([]);
+      setSubjectLoading(true);
       setSubjectError("");
-      setSubjectLoading(false);
-      return;
-    }
+      const signedIn = Boolean(localStorage.getItem("token"));
+      setHasToken(signedIn);
+      if (!signedIn) {
+        setProgressFilter("all");
+        setSortBy((current) => current.startsWith("progress-") ? "name-asc" : current);
+      }
+      setPage(1);
+      setAuthRevision((value) => value + 1);
+    };
+    window.addEventListener("authChanged", updateAuth);
+    window.addEventListener("storage", updateAuth);
+    return () => {
+      window.removeEventListener("authChanged", updateAuth);
+      window.removeEventListener("storage", updateAuth);
+    };
+  }, []);
 
+  useEffect(() => {
     const controller = new AbortController();
 
     async function fetchSubjects() {
       setSubjectLoading(true);
       setSubjectError("");
-      setSubjects([]);
 
       try {
         const response = await api.get(
-          `/learn/semesters/${selectedSemesterId}/subjects`,
+          "/learn/subjects",
           { signal: controller.signal },
         );
 
@@ -407,133 +415,69 @@ function Learn() {
     fetchSubjects();
 
     return () => controller.abort();
-  }, [selectedSemesterId, subjectRetry]);
+  }, [subjectRetry, authRevision]);
 
-  const selectSemester = (semester) => {
-    if (String(semester.id) === String(selectedSemesterId)) return;
+  const filteredCourses = useMemo(
+    () => selectCourses(subjects, search, progressFilter, availability, sortBy),
+    [subjects, search, progressFilter, availability, sortBy],
+  );
+  const pagination = useMemo(
+    () => getCoursePage(filteredCourses, page, coursesPerPage),
+    [filteredCourses, page, coursesPerPage],
+  );
+  const { pageCount, currentPage, visibleCourses } = pagination;
 
-    setSubjects([]);
-    setSubjectError("");
-    setSubjectLoading(true);
-    setSelectedSemester(semester);
-  };
+  useEffect(() => {
+    if (subjectLoading || subjectError) return;
+    setPage((current) => getCoursePage(filteredCourses, current, coursesPerPage).currentPage);
+  }, [filteredCourses, coursesPerPage, subjectLoading, subjectError]);
 
-  const retrySubjects = () => {
-    setSubjectRetry((value) => value + 1);
-  };
-
-  if (loading) {
-    return (
-      <div
-        role="status"
-        className="rounded-2xl border border-cyan-400/20 bg-cyan-400/10 px-4 py-4 text-sm text-cyan-200 shadow-lg backdrop-blur-xl"
-      >
-        Loading learning hub...
-      </div>
-    );
+  function changePageSize(value) {
+    const size = Number(value);
+    if (!PAGE_SIZE_OPTIONS.includes(size)) return;
+    setCoursesPerPage(size);
+    setPage(1);
   }
 
-  if (error) {
-    return (
-      <div
-        role="alert"
-        className="rounded-2xl border border-rose-400/20 bg-rose-400/10 px-4 py-4 text-sm text-rose-200 shadow-lg backdrop-blur-xl"
-      >
-        <p>{error}</p>
-
-        <button
-          type="button"
-          onClick={() => setSemesterRetry((value) => value + 1)}
-          className="mt-3 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold text-white transition hover:bg-white/10"
-        >
-          Retry
-        </button>
-      </div>
-    );
+  function changePage(nextPage) {
+    setPage(getCoursePage(filteredCourses, nextPage, coursesPerPage).currentPage);
   }
+
+  const inProgressCount = subjects.filter((subject) => getCourseState(subject) === "in-progress").length;
+
+  function updateControl(setter, value) {
+    setter(value);
+    setPage(1);
+  }
+
+  function resetControls() {
+    setSearch("");
+    setProgressFilter("all");
+    setAvailability("all");
+    setSortBy("name-asc");
+    setPage(1);
+  }
+
+  const retrySubjects = () => setSubjectRetry((value) => value + 1);
 
   return (
     <div className="grid gap-6">
-      {/* Semester selection */}
-      <section className="rounded-3xl border border-white/10 bg-slate-900/50 p-6 shadow-2xl backdrop-blur-xl">
-        <div className="mb-5 flex items-start justify-between gap-4">
-          <div>
-            <h3 className="text-xl font-semibold text-white">
-              Semester Tracks
-            </h3>
-
-            <p className="mt-2 max-w-2xl text-sm leading-7 text-slate-400">
-              Follow the National University CSE semester flow and
-              learn programming through guided lessons and practice.
-            </p>
-          </div>
-        </div>
-
-        {semesters.length === 0 ? (
-          <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-4 text-sm text-slate-400">
-            No learning semesters are available yet.
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-            {semesters.map((semester) => {
-              const isActive =
-                String(selectedSemesterId) === String(semester.id);
-
-              return (
-                <button
-                  key={semester.id}
-                  type="button"
-                  onClick={() => selectSemester(semester)}
-                  aria-pressed={isActive}
-                  className={[
-                    "rounded-3xl border p-5 text-left transition duration-200",
-                    isActive
-                      ? "border-sky-400/40 bg-sky-400/10 shadow-[0_0_0_1px_rgba(87,177,255,0.15),0_16px_40px_rgba(13,22,52,0.35)]"
-                      : "border-white/10 bg-white/5 hover:border-sky-400/30 hover:bg-white/[0.07]",
-                  ].join(" ")}
-                >
-                  <span className="mb-3 inline-block rounded-full bg-indigo-400/15 px-3 py-1 text-xs font-medium text-sky-200">
-                    {semesterLabel(semester.number)}
-                  </span>
-
-                  <h4 className="text-lg font-semibold text-white">
-                    {Number(semester.course_count || 0)}{" "}
-                    {Number(semester.course_count || 0) === 1
-                      ? "course"
-                      : "courses"}
-                  </h4>
-
-                  <p className="mt-2 text-sm leading-7 text-slate-400">
-                    {Array.isArray(semester.course_names) &&
-                    semester.course_names.length > 0
-                      ? semester.course_names.join(", ")
-                      : "No courses added yet."}
-                  </p>
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </section>
-
       {/* Courses */}
       <section className="rounded-3xl border border-white/10 bg-slate-900/50 p-6 shadow-2xl backdrop-blur-xl">
         <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
           <div>
             <h3 className="text-xl font-semibold text-white">
-              {selectedSemester
-                ? `${semesterLabel(selectedSemester.number)} — Courses`
-                : "Courses"}
+              Courses
             </h3>
 
             <p className="mt-2 max-w-2xl text-sm leading-7 text-slate-400">
               Choose a course to start learning or continue from your
-              next incomplete lesson. Unavailable courses are marked
-              as coming soon.
+              next incomplete lesson. Courses without available lessons
+              are marked as coming soon; lesson-loading errors show Retry.
             </p>
           </div>
 
-          {selectedSemester && (
+          {(
             <button
               type="button"
               disabled={subjectLoading}
@@ -542,6 +486,84 @@ function Learn() {
             >
               {subjectLoading ? "Loading..." : "Refresh"}
             </button>
+          )}
+        </div>
+
+        <div className="mb-5 space-y-3 border-y border-white/10 py-4">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(0,2fr)_1fr_1fr_1fr]">
+            <label className="block text-xs text-slate-400">
+              Search courses
+              <input
+                type="search"
+                value={search}
+                maxLength={100}
+                onChange={(event) => updateControl(setSearch, event.target.value)}
+                placeholder="Search by course name..."
+                className={`mt-2 ${FILTER_CLASS}`}
+              />
+            </label>
+            <label className="block text-xs text-slate-400">
+              Learning progress
+              <select
+                value={progressFilter}
+                disabled={!hasToken}
+                onChange={(event) => updateControl(setProgressFilter, event.target.value)}
+                className={`mt-2 ${FILTER_CLASS}`}
+              >
+                <option value="all">All progress</option>
+                <option value="not-started">Not started</option>
+                <option value="in-progress">In progress</option>
+                <option value="completed">Completed</option>
+              </select>
+            </label>
+            <label className="block text-xs text-slate-400">
+              Availability
+              <select value={availability} onChange={(event) => updateControl(setAvailability, event.target.value)} className={`mt-2 ${FILTER_CLASS}`}>
+                <option value="all">All courses</option>
+                <option value="available">Ready to learn</option>
+                <option value="coming-soon">Coming soon</option>
+                <option value="unavailable">Unavailable</option>
+              </select>
+            </label>
+            <label className="block text-xs text-slate-400">
+              Sort by
+              <select value={sortBy} onChange={(event) => updateControl(setSortBy, event.target.value)} className={`mt-2 ${FILTER_CLASS}`}>
+                <option value="name-asc">Name: A–Z</option>
+                <option value="name-desc">Name: Z–A</option>
+                <option value="progress-desc" disabled={!hasToken}>Progress: highest first</option>
+                <option value="progress-asc" disabled={!hasToken}>Progress: lowest first</option>
+              </select>
+            </label>
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p role="status" className="text-xs text-slate-400">
+              {subjectLoading ? "Loading courses..." : subjectError ? "Unable to load results." :
+                `Showing ${pagination.from}–${pagination.to} of ${pagination.total} matching courses (${subjects.length} total)`}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {hasToken && inProgressCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => updateControl(setProgressFilter, "in-progress")}
+                  aria-pressed={progressFilter === "in-progress"}
+                  className={[
+                    "rounded-lg border px-3 py-1.5 text-xs transition",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/50",
+                    progressFilter === "in-progress"
+                      ? "border-cyan-400/40 bg-cyan-400/15 text-cyan-200"
+                      : "border-white/10 bg-transparent text-slate-400 hover:border-white/20 hover:bg-white/5 hover:text-slate-200",
+                  ].join(" ")}
+                >
+                  In progress ({inProgressCount})
+                </button>
+              )}
+              <button type="button" onClick={resetControls} className="rounded-lg border border-white/10 px-3 py-1.5 text-xs text-slate-300 hover:bg-white/5">
+                Reset filters
+              </button>
+            </div>
+          </div>
+          {!hasToken && (
+            <p className="text-xs text-slate-500"><Link to="/login" className="text-cyan-300 hover:underline">Log in</Link> to filter courses by your learning progress.</p>
           )}
         </div>
 
@@ -567,14 +589,14 @@ function Learn() {
               Retry
             </button>
           </div>
-        ) : !selectedSemester ? (
-          <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-4 text-sm text-slate-400">
-            Select a semester to view its courses.
-          </div>
         ) : subjects.length === 0 ? (
           <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-4 text-sm leading-7 text-slate-400">
-            No programming learning tracks are currently included for
-            this semester.
+            No learning courses are available yet.
+          </div>
+        ) : filteredCourses.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-white/10 p-6 text-sm text-slate-400">
+            <p>No courses match your search and filters.</p>
+            <button type="button" onClick={resetControls} className="mt-3 text-cyan-300 hover:underline">Clear search and filters</button>
           </div>
         ) : (
           <>
@@ -595,7 +617,7 @@ function Learn() {
             </div>
 
             <div className="space-y-3">
-              {subjects.map((subject) => (
+              {visibleCourses.map((subject) => (
                 <CourseRow
                   key={subject.id}
                   subject={subject}
@@ -603,7 +625,27 @@ function Learn() {
                 />
               ))}
             </div>
+
           </>
+        )}
+        {!subjectLoading && !subjectError && (
+          <nav aria-label="Course pages" className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4">
+            <span className="text-xs text-slate-400">Page {currentPage} of {pageCount}</span>
+            <div className="flex flex-wrap gap-2">
+              <label className="flex items-center gap-2 text-xs text-slate-400">
+                Courses per page
+                <select
+                  value={coursesPerPage}
+                  onChange={(event) => changePageSize(event.target.value)}
+                  className="rounded-lg border border-white/10 bg-slate-950 px-2 py-1.5 text-xs text-slate-200 outline-none focus:border-cyan-400/60"
+                >
+                  {PAGE_SIZE_OPTIONS.map((size) => <option key={size} value={size}>{size}</option>)}
+                </select>
+              </label>
+              <button type="button" disabled={currentPage <= 1} onClick={() => changePage(currentPage - 1)} className="rounded-xl border border-white/10 px-3 py-2 text-xs text-slate-300 hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-40">Previous</button>
+              <button type="button" disabled={currentPage >= pageCount} onClick={() => changePage(currentPage + 1)} className="rounded-xl border border-white/10 px-3 py-2 text-xs text-slate-300 hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-40">Next</button>
+            </div>
+          </nav>
         )}
       </section>
     </div>

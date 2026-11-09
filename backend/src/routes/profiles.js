@@ -42,7 +42,7 @@ async function target(req, owner) {
   const id = owner ? req.user.userId : number(req.params.id, null);
   if (!id) throw bad("Invalid user ID.");
   const [rows] = await db.execute(
-    `SELECT id,name,display_name,bio,institution,department,semester,github_url,role,created_at${owner ? ",email" : ""} FROM users WHERE id=? AND status='active' LIMIT 1`,
+    `SELECT id,name,display_name,bio,institution,department,github_url,role,created_at${owner ? ",email" : ""} FROM users WHERE id=? AND status='active' LIMIT 1`,
     [id],
   );
   if (!rows.length) throw bad("Profile not found.", 404);
@@ -210,7 +210,6 @@ router.patch(
       bio: 500,
       institution: 150,
       department: 100,
-      semester: 50,
       github_url: 255,
     };
     if (

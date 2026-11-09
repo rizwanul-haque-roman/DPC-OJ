@@ -10,7 +10,6 @@ const fields = {
   bio: "Bio",
   institution: "Institution",
   department: "Department",
-  semester: "Semester",
   github_url: "GitHub profile URL",
 };
 
@@ -345,7 +344,7 @@ export default function Profile() {
 
                 {user.institution && (
                   <p className="pd-note">
-                    {[user.institution, user.department, user.semester]
+                    {[user.institution, user.department]
                       .filter(Boolean)
                       .join(" · ")}
                   </p>
@@ -554,7 +553,6 @@ export default function Profile() {
                           display_name: 100,
                           institution: 150,
                           department: 100,
-                          semester: 50,
                           github_url: 255,
                         }[key]
                       }

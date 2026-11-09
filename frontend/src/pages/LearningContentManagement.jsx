@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowDown,
   ArrowUp,
@@ -42,6 +42,7 @@ const emptyCourse = {
   description: "",
   language: "",
   is_placeholder: false,
+  is_active: true,
   execution_mode: "disabled",
   default_language: "",
   editor_enabled: false,
@@ -57,25 +58,80 @@ function message(error) {
   );
 }
 
-function semesterLabel(number) {
-  const semester = Number(number);
-  const year = Math.ceil(semester / 2);
-  const yearLabels = {
-    1: "1st",
-    2: "2nd",
-    3: "3rd",
-    4: "4th",
-  };
+function flag(value) {
+  return value === true || Number(value) === 1;
+}
 
-  return `${yearLabels[year] || `${year}th`} year - Semester ${semester}`;
+function filterCourses(courses, filters) {
+  const search = filters.search.trim().toLocaleLowerCase();
+  return courses.filter((course) => {
+    const matchesName = String(course.name || "").toLocaleLowerCase().includes(search) ||
+      String(course.id).includes(search);
+    return matchesName &&
+      (filters.visibility === "all" || flag(course.is_active) === (filters.visibility === "visible")) &&
+      (
+        filters.content === "all" ||
+        (filters.content === "regular" && !flag(course.is_placeholder)) ||
+        (filters.content === "placeholder" && flag(course.is_placeholder)) ||
+        (filters.content === "published" &&
+          Number(course.published_count || 0) > 0) ||
+        (filters.content === "unpublished" &&
+          Number(course.published_count || 0) === 0)
+      );
+  }).sort((a, b) => {
+    const nameOrder = String(a.name || "").localeCompare(String(b.name || ""), undefined, { sensitivity: "base", numeric: true }) || Number(a.id) - Number(b.id);
+    if (filters.sort === "name-desc") return -nameOrder;
+    if (filters.sort === "lessons-desc") return Number(b.lesson_count || 0) - Number(a.lesson_count || 0) || nameOrder;
+    if (filters.sort === "lessons-asc") return Number(a.lesson_count || 0) - Number(b.lesson_count || 0) || nameOrder;
+    return nameOrder;
+  });
+}
+
+function filterLessons(lessons, filters) {
+  const search = filters.search.trim().toLocaleLowerCase();
+  return lessons.map((topic, index) => ({ topic, index })).filter(({ topic }) =>
+    (String(topic.title || "").toLocaleLowerCase().includes(search) || String(topic.id).includes(search)) &&
+    (filters.status === "all" || topic.status === filters.status),
+  ).sort((a, b) => {
+    if (filters.sort === "order") return a.index - b.index;
+    const compared = String(a.topic.title || "").localeCompare(String(b.topic.title || ""), undefined, { sensitivity: "base", numeric: true }) || Number(a.topic.id) - Number(b.topic.id);
+    return filters.sort === "name-desc" ? -compared : compared;
+  });
+}
+
+function paginate(items, page, pageSize) {
+  const pages = Math.max(1, Math.ceil(items.length / pageSize));
+  const current = Math.max(1, Math.min(page, pages));
+  const offset = (current - 1) * pageSize;
+  return { pages, current, from: items.length ? offset + 1 : 0,
+    to: Math.min(offset + pageSize, items.length), items: items.slice(offset, offset + pageSize) };
+}
+
+function ListPagination({ label, data, total, pageSize, onPage, onPageSize, disabled }) {
+  return (
+    <nav aria-label={`${label} pagination`} className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4">
+      <p role="status" className="text-xs text-slate-400">
+        Showing {data.from}–{data.to} of {total} matching {label.toLowerCase()}
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="flex items-center gap-2 text-xs text-slate-400">
+          {label} per page
+          <select value={pageSize} disabled={disabled} onChange={(event) => onPageSize(Number(event.target.value))} className="rounded-lg border border-white/10 bg-slate-950 px-2 py-2 text-slate-200">
+            {[5, 10, 25, 50].map((size) => <option key={size} value={size}>{size}</option>)}
+          </select>
+        </label>
+        <span className="px-2 text-xs text-slate-500">Page {data.current} of {data.pages}</span>
+        <button type="button" className={neutral} disabled={disabled || data.current === 1} onClick={() => onPage(data.current - 1)}>Previous</button>
+        <button type="button" className={neutral} disabled={disabled || data.current === data.pages} onClick={() => onPage(data.current + 1)}>Next</button>
+      </div>
+    </nav>
+  );
 }
 
 export default function LearningContentManagement() {
-  const [semesters, setSemesters] = useState([]);
   const [courses, setCourses] = useState([]);
   const [lessons, setLessons] = useState([]);
 
-  const [semesterId, setSemesterId] = useState("");
   const [courseId, setCourseId] = useState("");
 
   const [loading, setLoading] = useState(true);
@@ -93,21 +149,46 @@ export default function LearningContentManagement() {
   const [courseFormError, setCourseFormError] = useState("");
   const [lessonEditor, setLessonEditor] = useState(null);
 
+  const [courseFilters, setCourseFilters] = useState({ search: "", visibility: "all", content: "all", sort: "name-asc" });
+  const [lessonFilters, setLessonFilters] = useState({ search: "", status: "all", sort: "order" });
+  const [coursePage, setCoursePage] = useState(1);
+  const [coursePageSize, setCoursePageSize] = useState(10);
+  const [lessonPage, setLessonPage] = useState(1);
+  const [lessonPageSize, setLessonPageSize] = useState(10);
+
   const actionLock = useRef(false);
 
-  const selectedSemester = semesters.find(
-    (item) => String(item.id) === semesterId,
-  );
+  const selectedCourse = courses.find((item) => String(item.id) === courseId);
+  const filteredCourses = useMemo(() => filterCourses(courses, courseFilters), [courses, courseFilters]);
+  const filteredLessons = useMemo(() => filterLessons(lessons, lessonFilters), [lessons, lessonFilters]);
+  const coursePagination = paginate(filteredCourses, coursePage, coursePageSize);
+  const lessonPagination = paginate(filteredLessons, lessonPage, lessonPageSize);
+  const visibleCourses = coursePagination.items;
+  const visibleLessons = lessonPagination.items;
+  const reorderAllowed = !lessonFilters.search.trim() && lessonFilters.status === "all" && lessonFilters.sort === "order";
 
-  const selectedCourse = courses.find(
-    (item) =>
-      String(item.id) === courseId &&
-      String(item.semester_id) === semesterId,
-  );
+  function updateCourseFilter(field, value) {
+    setCourseFilters((current) => ({ ...current, [field]: value }));
+    setCoursePage(1);
+  }
+  function updateLessonFilter(field, value) {
+    setLessonFilters((current) => ({ ...current, [field]: value }));
+    setLessonPage(1);
+  }
+  function resetCourseFilters() {
+    setCourseFilters({ search: "", visibility: "all", content: "all", sort: "name-asc" });
+    setCoursePage(1);
+  }
+  function resetLessonFilters() {
+    setLessonFilters({ search: "", status: "all", sort: "order" });
+    setLessonPage(1);
+  }
 
-  const visibleCourses = courses.filter(
-    (item) => String(item.semester_id) === semesterId,
-  );
+  useEffect(() => {
+    setLessonFilters({ search: "", status: "all", sort: "order" });
+    setLessonPage(1);
+  }, [courseId]);
+
 
   useEffect(() => {
     const controller = new AbortController();
@@ -117,35 +198,15 @@ export default function LearningContentManagement() {
       setError("");
 
       try {
-        const [semesterResponse, courseResponse] = await Promise.all([
-          api.get("/admin/learning/semesters", {
-            signal: controller.signal,
-          }),
-          api.get("/admin/learning/subjects", {
-            signal: controller.signal,
-          }),
-        ]);
-
-        const nextSemesters = semesterResponse.data?.semesters;
+        const courseResponse = await api.get("/admin/learning/subjects", {
+          signal: controller.signal,
+        });
         const nextCourses = courseResponse.data;
-
-        if (
-          !Array.isArray(nextSemesters) ||
-          !Array.isArray(nextCourses)
-        ) {
-          throw new Error("Unexpected learning structure response.");
+        if (!Array.isArray(nextCourses)) {
+          throw new Error("Unexpected course response.");
         }
-
         if (controller.signal.aborted) return;
-
-        setSemesters(nextSemesters);
         setCourses(nextCourses);
-
-        setSemesterId((current) =>
-          nextSemesters.some((item) => String(item.id) === current)
-            ? current
-            : String(nextSemesters[0]?.id || ""),
-        );
 
         setCourseId((current) =>
           nextCourses.some((item) => String(item.id) === current)
@@ -234,14 +295,6 @@ export default function LearningContentManagement() {
     }
   }
 
-  function selectSemester(value) {
-    setSemesterId(value);
-    setCourseId("");
-    setLessons([]);
-    setSuccess("");
-    setError("");
-  }
-
   function openCourseForm(course = null) {
     setCourseFormError("");
 
@@ -253,6 +306,7 @@ export default function LearningContentManagement() {
             description: course.description || "",
             language: course.language || "",
             is_placeholder: Boolean(course.is_placeholder),
+            is_active: course.is_active === true || Number(course.is_active) === 1,
             execution_mode: course.execution_mode || "disabled",
             default_language: course.default_language || "",
             editor_enabled: Boolean(course.editor_enabled),
@@ -308,10 +362,7 @@ export default function LearningContentManagement() {
             `/admin/learning/subjects/${courseForm.id}`,
             payload,
           )
-        : await api.post("/admin/learning/subjects", {
-            ...payload,
-            semester_id: Number(semesterId),
-          });
+        : await api.post("/admin/learning/subjects", payload);
 
       setCourseForm(null);
       setSuccess(response.data.message);
@@ -401,6 +452,7 @@ export default function LearningContentManagement() {
   }
 
   function moveLesson(index, direction) {
+    if (!reorderAllowed || lessonsLoading || actionLock.current) return;
     const nextIndex = index + direction;
 
     if (nextIndex < 0 || nextIndex >= lessons.length) return;
@@ -474,8 +526,8 @@ export default function LearningContentManagement() {
               Learning workspace
             </h2>
             <p className="mt-2 text-sm leading-6 text-slate-400">
-              Choose a semester, manage its courses, then create and
-              edit lessons inside a course.
+              Manage courses directly, then create and edit lessons
+              inside each course.
             </p>
           </div>
 
@@ -493,31 +545,6 @@ export default function LearningContentManagement() {
           </button>
         </div>
 
-        <label
-          htmlFor="learning-semester"
-          className="mb-2 mt-6 block text-xs font-semibold uppercase tracking-wider text-slate-500"
-        >
-          Semester
-        </label>
-
-        <select
-          id="learning-semester"
-          value={semesterId}
-          disabled={disabled}
-          onChange={(event) => selectSemester(event.target.value)}
-          className={`${input} max-w-xl`}
-        >
-          <option value="">
-            {loading ? "Loading semesters..." : "Select a semester"}
-          </option>
-
-          {semesters.map((semester) => (
-            <option key={semester.id} value={semester.id}>
-                {semesterLabel(semester.number)}
-                {!semester.is_active ? " (Inactive)" : ""}
-            </option>
-            ))}
-        </select>
       </section>
 
       {courseForm && (
@@ -526,9 +553,6 @@ export default function LearningContentManagement() {
             {courseForm.id ? "Edit course" : "Add course"}
           </h2>
 
-          <p className="mt-2 text-sm text-slate-400">
-            Semester {selectedSemester?.number}
-          </p>
 
           <form onSubmit={saveCourse} className="mt-5">
             <fieldset disabled={busy} className="space-y-4">
@@ -605,6 +629,7 @@ export default function LearningContentManagement() {
 
               <div className="flex flex-wrap gap-5 rounded-xl border border-white/10 bg-slate-950/30 p-4">
                 {[
+                  ["is_active", "Course visible to students"],
                   ["is_placeholder", "Placeholder course"],
                   ["editor_enabled", "Enable practice editor"],
                   ["run_enabled", "Enable Run"],
@@ -670,7 +695,7 @@ export default function LearningContentManagement() {
         </section>
       )}
 
-      {semesterId && (
+      {(
         <section className={panel}>
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
@@ -678,8 +703,7 @@ export default function LearningContentManagement() {
                 Courses
               </h2>
               <p className="mt-1 text-sm text-slate-400">
-                Semester {selectedSemester?.number} ·{" "}
-                {visibleCourses.length} courses
+                {filteredCourses.length} matching courses · {courses.length} total
               </p>
             </div>
 
@@ -694,13 +718,42 @@ export default function LearningContentManagement() {
             </button>
           </div>
 
+          <div className="mt-5 grid gap-3 border-y border-white/10 py-4 sm:grid-cols-2 xl:grid-cols-4">
+            <label className="text-xs text-slate-400">Search courses
+              <input type="search" maxLength={100} value={courseFilters.search} onChange={(event) => updateCourseFilter("search", event.target.value)} disabled={disabled} placeholder="Course name or ID..." className={`${input} mt-2`} />
+            </label>
+            <label className="text-xs text-slate-400">Visibility
+              <select value={courseFilters.visibility} onChange={(event) => updateCourseFilter("visibility", event.target.value)} disabled={disabled} className={`${input} mt-2`}>
+                <option value="all">All visibility</option><option value="visible">Visible to students</option><option value="hidden">Hidden from students</option>
+              </select>
+            </label>
+            <label className="text-xs text-slate-400">Course type
+              <select value={courseFilters.content} onChange={(event) => updateCourseFilter("content", event.target.value)} disabled={disabled} className={`${input} mt-2`}>
+                <option value="all">All types</option>
+                <option value="regular">Non-placeholder</option>
+                <option value="placeholder">Placeholder</option>
+                <option value="published">Published — has published lessons</option>
+                <option value="unpublished">Not published — no published lessons</option>
+              </select>
+            </label>
+            <label className="text-xs text-slate-400">Sort courses
+              <select value={courseFilters.sort} onChange={(event) => updateCourseFilter("sort", event.target.value)} disabled={disabled} className={`${input} mt-2`}>
+                <option value="name-asc">Name: A–Z</option><option value="name-desc">Name: Z–A</option><option value="lessons-desc">Most lessons</option><option value="lessons-asc">Fewest lessons</option>
+              </select>
+            </label>
+          </div>
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-xs text-slate-500">Filtering courses does not close the selected course’s lesson workspace.</p>
+            <button type="button" disabled={disabled} onClick={resetCourseFilters} className={neutral}>Reset course filters</button>
+          </div>
+
           {loading ? (
             <p role="status" className="py-8 text-sm text-slate-400">
               Loading courses...
             </p>
           ) : visibleCourses.length === 0 ? (
             <p className="mt-5 rounded-2xl border border-dashed border-white/10 p-8 text-center text-sm text-slate-500">
-              No courses in this semester. Add the first course.
+              {courses.length === 0 ? "No courses yet. Add the first course." : "No courses match your search and filters. Reset the course filters to see all courses."}
             </p>
           ) : (
             <div className="mt-5 grid gap-4 xl:grid-cols-2">
@@ -740,6 +793,9 @@ export default function LearningContentManagement() {
                           {course.archived_count || 0} archived
                         </p>
 
+                        {!course.is_active && (
+                          <p className="mt-1 text-xs text-rose-300">Hidden from students</p>
+                        )}
                         {course.is_placeholder && (
                           <p className="mt-1 text-xs text-amber-300">
                             Placeholder course
@@ -794,6 +850,10 @@ export default function LearningContentManagement() {
               })}
             </div>
           )}
+          {!loading && (
+            <ListPagination label="Courses" data={coursePagination} total={filteredCourses.length} pageSize={coursePageSize}
+              onPage={setCoursePage} onPageSize={(size) => { if ([5, 10, 25, 50].includes(size)) { setCoursePageSize(size); setCoursePage(1); } }} disabled={disabled} />
+          )}
         </section>
       )}
 
@@ -831,6 +891,26 @@ export default function LearningContentManagement() {
             </button>
           </div>
 
+          <div className="mt-5 grid gap-3 border-y border-white/10 py-4 sm:grid-cols-3">
+            <label className="text-xs text-slate-400">Search lessons
+              <input type="search" maxLength={100} value={lessonFilters.search} onChange={(event) => updateLessonFilter("search", event.target.value)} disabled={disabled || lessonsLoading} placeholder="Lesson title or ID..." className={`${input} mt-2`} />
+            </label>
+            <label className="text-xs text-slate-400">Lesson status
+              <select value={lessonFilters.status} onChange={(event) => updateLessonFilter("status", event.target.value)} disabled={disabled || lessonsLoading} className={`${input} mt-2`}>
+                <option value="all">All statuses</option><option value="published">Published</option><option value="draft">Draft</option><option value="archived">Archived</option>
+              </select>
+            </label>
+            <label className="text-xs text-slate-400">Sort lessons
+              <select value={lessonFilters.sort} onChange={(event) => updateLessonFilter("sort", event.target.value)} disabled={disabled || lessonsLoading} className={`${input} mt-2`}>
+                <option value="order">Learning order</option><option value="name-asc">Title: A–Z</option><option value="name-desc">Title: Z–A</option>
+              </select>
+            </label>
+          </div>
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-xs text-slate-500">{filteredLessons.length} matching lessons · {lessons.length} total</p>
+            <button type="button" disabled={disabled || lessonsLoading} onClick={resetLessonFilters} className={neutral}>Reset lesson filters</button>
+          </div>
+
           {lessonError && (
             <p
               role="alert"
@@ -858,6 +938,8 @@ export default function LearningContentManagement() {
             <p className="mt-5 rounded-2xl border border-dashed border-white/10 p-8 text-center text-sm text-slate-500">
               This course has no lessons yet. Add its first lesson.
             </p>
+          ) : filteredLessons.length === 0 ? (
+            <p className="mt-5 rounded-2xl border border-dashed border-white/10 p-6 text-sm text-slate-400">No lessons match your search and status filter.</p>
           ) : (
             <div className="mt-6 overflow-x-auto rounded-2xl border border-white/10">
               <table className="w-full min-w-[900px] text-left text-sm">
@@ -882,7 +964,7 @@ export default function LearningContentManagement() {
                 </thead>
 
                 <tbody>
-                  {lessons.map((topic, index) => (
+                  {visibleLessons.map(({ topic, index }) => (
                     <tr
                       key={topic.id}
                       className="border-t border-white/5 hover:bg-white/[0.025]"
@@ -895,7 +977,7 @@ export default function LearningContentManagement() {
 
                           <button
                             type="button"
-                            disabled={disabled || index === 0}
+                            disabled={disabled || !reorderAllowed || index === 0}
                             aria-label={`Move ${topic.title} up`}
                             onClick={() => moveLesson(index, -1)}
                             className={`${neutral} p-2`}
@@ -907,6 +989,7 @@ export default function LearningContentManagement() {
                             type="button"
                             disabled={
                               disabled ||
+                              !reorderAllowed ||
                               index === lessons.length - 1
                             }
                             aria-label={`Move ${topic.title} down`}
@@ -1015,6 +1098,14 @@ export default function LearningContentManagement() {
                 </tbody>
               </table>
             </div>
+          )}
+
+          {!lessonsLoading && !lessonError && (
+            <ListPagination label="Lessons" data={lessonPagination} total={filteredLessons.length} pageSize={lessonPageSize}
+              onPage={setLessonPage} onPageSize={(size) => { if ([5, 10, 25, 50].includes(size)) { setLessonPageSize(size); setLessonPage(1); } }} disabled={disabled} />
+          )}
+          {!reorderAllowed && (
+            <p role="status" className="mt-3 text-xs text-amber-200">To reorder lessons, clear the lesson search, select All statuses, and sort by Learning order.</p>
           )}
 
           <p className="mt-4 text-xs leading-6 text-slate-500">
