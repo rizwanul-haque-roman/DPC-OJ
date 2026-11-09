@@ -41,7 +41,8 @@ async function requireAuth(req, res, next) {
         email,
         role,
         status,
-        token_version
+        token_version,
+      email_verification_status
       FROM users
       WHERE id = ?
       LIMIT 1`,
@@ -53,6 +54,13 @@ async function requireAuth(req, res, next) {
     if (!user || user.status !== "active") {
       return res.status(403).json({
         error: "This account is unavailable or suspended.",
+      });
+    }
+
+    if (!["verified", "legacy_approved"].includes(user.email_verification_status)) {
+      return res.status(403).json({
+        error: "Email verification is required before using this account.",
+        code: "EMAIL_NOT_VERIFIED",
       });
     }
 

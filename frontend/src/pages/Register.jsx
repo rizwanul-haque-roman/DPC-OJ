@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import api from "../api/axios";
 import PasswordInput from "../components/PasswordInput";
+import { saveRegistrationSession, readRegistrationSession } from "../utils/registrationSession";
 
 function Register() {
   const [formData, setFormData] = useState({
@@ -12,6 +13,8 @@ function Register() {
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const navigate = useNavigate();
+  const inFlight = useRef(false);
+  const pending = readRegistrationSession();
 
   const handleChange = (event) => {
     const { name, value } = event.target;
@@ -24,6 +27,7 @@ function Register() {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
+    if (inFlight.current) return;
     setError("");
 
     const username = formData.username.trim();
@@ -35,12 +39,13 @@ function Register() {
       return;
     }
 
-    if (formData.password.length < 6) {
-      setError("Password must be at least 6 characters long.");
+    if (formData.password.length < 8 || new TextEncoder().encode(formData.password).length > 72) {
+      setError("Use at least 8 characters and no more than 72 UTF-8 bytes for the password.");
       return;
     }
 
     try {
+      inFlight.current = true;
       setSubmitting(true);
 
       const res = await api.post("/auth/register", {
@@ -49,15 +54,13 @@ function Register() {
         password: formData.password,
       });
 
-      localStorage.setItem("token", res.data.token);
-      localStorage.setItem("user", JSON.stringify(res.data.user));
-
-      window.dispatchEvent(new Event("authChanged"));
-
-      navigate("/problems");
+      const registration = saveRegistrationSession(res.data);
+      setFormData((current) => ({ ...current, password: "" }));
+      navigate("/verify-email", { state: { registration } });
     } catch (err) {
       setError(err.response?.data?.error || "Registration failed.");
     } finally {
+      inFlight.current = false;
       setSubmitting(false);
     }
   };
@@ -105,7 +108,13 @@ function Register() {
           Join the platform and start your coding journey.
         </p>
 
+        {pending && (
+          <p className="mt-4 text-sm text-cyan-200">
+            A verification is pending. <Link to="/verify-email" className="underline">Continue verification</Link> or open that page to start over.
+          </p>
+        )}
         <form onSubmit={handleSubmit} className="mt-8 space-y-5">
+          <fieldset disabled={submitting} className="space-y-5">
           <div>
             <label
               htmlFor="username"
@@ -161,8 +170,8 @@ function Register() {
             onChange={handleChange}
             autoComplete="new-password"
             placeholder="Create a password"
-            minLength={6}
-            hint="Password must contain at least 6 characters."
+            minLength={8}
+            hint="Use at least 8 characters and at most 72 UTF-8 bytes."
             required
           />
 
@@ -171,12 +180,13 @@ function Register() {
             type="submit"
             disabled={submitting}
           >
-            {submitting ? "Creating account..." : "Register"}
+            {submitting ? "Sending verification code..." : "Send verification code"}
           </button>
+          </fieldset>
         </form>
 
         {error && (
-          <p className="mt-4 rounded-2xl border border-rose-400/20 bg-rose-400/10 px-4 py-3 text-sm text-rose-200">
+          <p role="alert" className="mt-4 rounded-2xl border border-rose-400/20 bg-rose-400/10 px-4 py-3 text-sm text-rose-200">
             {error}
           </p>
         )}
