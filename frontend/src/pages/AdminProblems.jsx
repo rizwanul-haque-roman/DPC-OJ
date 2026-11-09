@@ -499,7 +499,10 @@ export default function AdminProblems() {
         ? await api.put(`${BASE}/${editingId}`, payload)
         : await api.post(BASE, payload);
 
-      setEditingId(response.data.id);
+      setEditingId(null);
+      setForm(blankProblem());
+      setFormOpen(false);
+      setHasEditor(false);
       setMessage(response.data.message || "Problem saved.");
 
       try {
@@ -513,7 +516,6 @@ export default function AdminProblems() {
       setError(errorMessage(err));
     } finally {
       setBusy(false);
-      scrollToPageTop();
     }
   }
 
