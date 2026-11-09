@@ -157,6 +157,7 @@ export default function LearningContentManagement() {
   const [lessonPageSize, setLessonPageSize] = useState(10);
 
   const actionLock = useRef(false);
+  const selectedCourseSectionRef = useRef(null);
 
   const selectedCourse = courses.find((item) => String(item.id) === courseId);
   const filteredCourses = useMemo(() => filterCourses(courses, courseFilters), [courses, courseFilters]);
@@ -187,6 +188,15 @@ export default function LearningContentManagement() {
   useEffect(() => {
     setLessonFilters({ search: "", status: "all", sort: "order" });
     setLessonPage(1);
+  }, [courseId]);
+
+  useEffect(() => {
+    if (courseId) {
+      selectedCourseSectionRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }
   }, [courseId]);
 
 
@@ -858,7 +868,7 @@ export default function LearningContentManagement() {
       )}
 
       {selectedCourse && (
-        <section className={panel}>
+        <section ref={selectedCourseSectionRef} className={panel}>
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wider text-cyan-300">
@@ -875,20 +885,38 @@ export default function LearningContentManagement() {
               </p>
             </div>
 
-            <button
-              type="button"
-              disabled={disabled || lessonsLoading}
-              onClick={() =>
-                setLessonEditor({
-                  subject: selectedCourse,
-                  topicId: null,
-                })
-              }
-              className={primary}
-            >
-              <Plus size={15} />
-              Add lesson
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  if (
+                    window.confirm(
+                      "Close the selected course workspace?",
+                    )
+                  ) {
+                    setCourseId("");
+                  }
+                }}
+                className={neutral}
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                disabled={disabled || lessonsLoading}
+                onClick={() =>
+                  setLessonEditor({
+                    subject: selectedCourse,
+                    topicId: null,
+                  })
+                }
+                className={primary}
+              >
+                <Plus size={15} />
+                Add lesson
+              </button>
+            </div>
           </div>
 
           <div className="mt-5 grid gap-3 border-y border-white/10 py-4 sm:grid-cols-3">
