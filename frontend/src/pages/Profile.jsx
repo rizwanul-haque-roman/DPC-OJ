@@ -361,10 +361,6 @@ export default function Profile() {
                 >
                   Edit profile
                 </button>
-
-                <Link className="pd-button" to={`/users/${user.id}`}>
-                  Public view
-                </Link>
               </div>
             )}
           </div>
