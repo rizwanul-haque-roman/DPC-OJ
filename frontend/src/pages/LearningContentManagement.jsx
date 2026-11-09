@@ -62,6 +62,14 @@ function flag(value) {
   return value === true || Number(value) === 1;
 }
 
+function isCourseAvailable(course) {
+  return (
+    flag(course.is_active) &&
+    !flag(course.is_placeholder) &&
+    Number(course.published_count || 0) > 0
+  );
+}
+
 function filterCourses(courses, filters) {
   const search = filters.search.trim().toLocaleLowerCase();
   return courses.filter((course) => {
@@ -73,10 +81,8 @@ function filterCourses(courses, filters) {
         filters.content === "all" ||
         (filters.content === "regular" && !flag(course.is_placeholder)) ||
         (filters.content === "placeholder" && flag(course.is_placeholder)) ||
-        (filters.content === "published" &&
-          Number(course.published_count || 0) > 0) ||
-        (filters.content === "unpublished" &&
-          Number(course.published_count || 0) === 0)
+        (filters.content === "available" && isCourseAvailable(course)) ||
+        (filters.content === "unavailable" && !isCourseAvailable(course))
       );
   }).sort((a, b) => {
     const nameOrder = String(a.name || "").localeCompare(String(b.name || ""), undefined, { sensitivity: "base", numeric: true }) || Number(a.id) - Number(b.id);
@@ -157,6 +163,8 @@ export default function LearningContentManagement() {
   const [lessonPageSize, setLessonPageSize] = useState(10);
 
   const actionLock = useRef(false);
+  const courseFormSectionRef = useRef(null);
+  const selectedCourseSectionRef = useRef(null);
 
   const selectedCourse = courses.find((item) => String(item.id) === courseId);
   const filteredCourses = useMemo(() => filterCourses(courses, courseFilters), [courses, courseFilters]);
@@ -188,6 +196,24 @@ export default function LearningContentManagement() {
     setLessonFilters({ search: "", status: "all", sort: "order" });
     setLessonPage(1);
   }, [courseId]);
+
+  useEffect(() => {
+    if (courseId) {
+      selectedCourseSectionRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }
+  }, [courseId]);
+
+  useEffect(() => {
+    if (courseForm) {
+      courseFormSectionRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }
+  }, [courseForm]);
 
 
   useEffect(() => {
@@ -498,6 +524,7 @@ export default function LearningContentManagement() {
   }
 
   const disabled = busy || loading || courseForm !== null;
+  const courseActionsDisabled = disabled || Boolean(courseId);
 
   return (
     <div className="space-y-6">
@@ -548,7 +575,7 @@ export default function LearningContentManagement() {
       </section>
 
       {courseForm && (
-        <section className={panel}>
+        <section ref={courseFormSectionRef} className={panel}>
           <h2 className="text-xl font-bold text-white">
             {courseForm.id ? "Edit course" : "Add course"}
           </h2>
@@ -709,7 +736,7 @@ export default function LearningContentManagement() {
 
             <button
               type="button"
-              disabled={disabled}
+              disabled={courseActionsDisabled}
               onClick={() => openCourseForm()}
               className={primary}
             >
@@ -727,13 +754,13 @@ export default function LearningContentManagement() {
                 <option value="all">All visibility</option><option value="visible">Visible to students</option><option value="hidden">Hidden from students</option>
               </select>
             </label>
-            <label className="text-xs text-slate-400">Course type
+            <label className="text-xs text-slate-400">Course type / availability
               <select value={courseFilters.content} onChange={(event) => updateCourseFilter("content", event.target.value)} disabled={disabled} className={`${input} mt-2`}>
-                <option value="all">All types</option>
+                <option value="all">All courses</option>
                 <option value="regular">Non-placeholder</option>
                 <option value="placeholder">Placeholder</option>
-                <option value="published">Published — has published lessons</option>
-                <option value="unpublished">Not published — no published lessons</option>
+                <option value="available">Available to learn</option>
+                <option value="unavailable">Unavailable to learn</option>
               </select>
             </label>
             <label className="text-xs text-slate-400">Sort courses
@@ -780,6 +807,16 @@ export default function LearningContentManagement() {
                           {course.name}
                         </h3>
 
+                        <span
+                          className={`mt-2 inline-flex rounded-full border px-2.5 py-1 text-xs ${
+                            isCourseAvailable(course)
+                              ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-200"
+                              : "border-amber-400/20 bg-amber-400/10 text-amber-200"
+                          }`}
+                        >
+                          {isCourseAvailable(course) ? "Available to learn" : "Unavailable to learn"}
+                        </span>
+
                         {course.description && (
                           <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-400">
                             {course.description}
@@ -807,7 +844,7 @@ export default function LearningContentManagement() {
                     <div className="mt-5 flex flex-wrap gap-2">
                       <button
                         type="button"
-                        disabled={disabled}
+                        disabled={courseActionsDisabled}
                         onClick={() => {
                           setCourseId(String(course.id));
                           setSuccess("");
@@ -820,7 +857,7 @@ export default function LearningContentManagement() {
 
                       <button
                         type="button"
-                        disabled={disabled}
+                        disabled={courseActionsDisabled}
                         onClick={() => openCourseForm(course)}
                         className={neutral}
                       >
@@ -831,7 +868,8 @@ export default function LearningContentManagement() {
                       <button
                         type="button"
                         disabled={
-                          disabled || Number(course.lesson_count) > 0
+                          courseActionsDisabled ||
+                          Number(course.lesson_count) > 0
                         }
                         title={
                           Number(course.lesson_count) > 0
@@ -858,7 +896,7 @@ export default function LearningContentManagement() {
       )}
 
       {selectedCourse && (
-        <section className={panel}>
+        <section ref={selectedCourseSectionRef} className={panel}>
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wider text-cyan-300">
@@ -875,20 +913,38 @@ export default function LearningContentManagement() {
               </p>
             </div>
 
-            <button
-              type="button"
-              disabled={disabled || lessonsLoading}
-              onClick={() =>
-                setLessonEditor({
-                  subject: selectedCourse,
-                  topicId: null,
-                })
-              }
-              className={primary}
-            >
-              <Plus size={15} />
-              Add lesson
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  if (
+                    window.confirm(
+                      "Close the selected course workspace?",
+                    )
+                  ) {
+                    setCourseId("");
+                  }
+                }}
+                className={neutral}
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                disabled={disabled || lessonsLoading}
+                onClick={() =>
+                  setLessonEditor({
+                    subject: selectedCourse,
+                    topicId: null,
+                  })
+                }
+                className={primary}
+              >
+                <Plus size={15} />
+                Add lesson
+              </button>
+            </div>
           </div>
 
           <div className="mt-5 grid gap-3 border-y border-white/10 py-4 sm:grid-cols-3">

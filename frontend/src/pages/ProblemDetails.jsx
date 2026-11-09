@@ -1037,7 +1037,7 @@ function ProblemDetails() {
         </section>
 
         {/* Editor column */}
-        <section className="flex min-h-0 min-w-0 flex-col bg-[#080d1d]">
+        <section className="flex min-h-0 min-w-0 flex-col overflow-hidden bg-[#080d1d]">
           <div className="flex h-11 shrink-0 items-center justify-between border-b border-white/10 bg-slate-900/75 px-3">
             <div className="relative">
               <button
@@ -1109,96 +1109,99 @@ function ProblemDetails() {
             </div>
           </div>
 
-          <div className="relative min-h-[260px] min-w-0 flex-1 overflow-hidden">
-            <Editor
-              height="100%"
-              width="100%"
-              language={EDITOR_LANGUAGES[language]}
-              theme="vs-dark"
-              value={code}
-              onChange={(value) => setCode(value ?? "")}
-              loading={
-                <div className="flex h-full items-center justify-center text-sm text-slate-400">
-                  Loading code editor...
-                </div>
-              }
-              options={{
-                automaticLayout: true,
-                ariaLabel: "Solution code editor",
-                fontSize: 14,
-                fontFamily: "Consolas, 'Courier New', monospace",
-                lineHeight: 24,
-                lineNumbers: "on",
-                minimap: { enabled: false },
-                tabSize: 4,
-                insertSpaces: true,
-                detectIndentation: false,
-                tabFocusMode: false,
-                autoIndent: "full",
-                autoClosingBrackets: "always",
-                autoClosingQuotes: "always",
-                matchBrackets: "always",
-                folding: true,
-                scrollBeyondLastLine: false,
-                wordWrap: "on",
-                renderWhitespace: "selection",
-                renderLineHighlight: "line",
-                padding: { top: 16, bottom: 16 },
-                scrollbar: {
-                  verticalScrollbarSize: 8,
-                  horizontalScrollbarSize: 8,
-                },
-                readOnly: busy,
-                formatOnPaste: false,
-                formatOnType: false,
-              }}
-            />
-          </div>
-
-          <div className="shrink-0 border-t border-white/10 bg-slate-900/75">
-            <div className="flex items-center justify-between border-b border-white/10 px-4 py-2.5">
-              <span className="text-[11px] font-medium uppercase tracking-wide text-slate-400">
-                Test against Custom Input
-              </span>
-
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => setCustomInput("")}
-                className="text-[11px] text-slate-500 hover:text-slate-200 disabled:opacity-50"
-              >
-                Clear
-              </button>
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overscroll-contain">
+            <div className="relative min-h-[160px] min-w-0 flex-1 overflow-hidden">
+              <Editor
+                height="100%"
+                width="100%"
+                language={EDITOR_LANGUAGES[language]}
+                theme="vs-dark"
+                value={code}
+                onChange={(value) => setCode(value ?? "")}
+                loading={
+                  <div className="flex h-full items-center justify-center text-sm text-slate-400">
+                    Loading code editor...
+                  </div>
+                }
+                options={{
+                  automaticLayout: true,
+                  ariaLabel: "Solution code editor",
+                  fontSize: 14,
+                  fontFamily: "Consolas, 'Courier New', monospace",
+                  lineHeight: 24,
+                  lineNumbers: "on",
+                  minimap: { enabled: false },
+                  tabSize: 4,
+                  insertSpaces: true,
+                  detectIndentation: false,
+                  tabFocusMode: false,
+                  autoIndent: "full",
+                  autoClosingBrackets: "always",
+                  autoClosingQuotes: "always",
+                  matchBrackets: "always",
+                  folding: true,
+                  scrollBeyondLastLine: false,
+                  wordWrap: "on",
+                  renderWhitespace: "selection",
+                  renderLineHighlight: "line",
+                  padding: { top: 16, bottom: 16 },
+                  scrollbar: {
+                    verticalScrollbarSize: 8,
+                    horizontalScrollbarSize: 8,
+                  },
+                  readOnly: busy,
+                  formatOnPaste: false,
+                  formatOnType: false,
+                }}
+              />
             </div>
 
-            <textarea
-              value={customInput}
-              onChange={(event) => setCustomInput(event.target.value)}
-              disabled={busy}
-              rows={4}
-              spellCheck={false}
-              placeholder="Enter custom input here..."
-              aria-label="Custom input"
-              className="w-full resize-none bg-transparent px-4 py-3 font-mono text-xs leading-5 text-slate-300 outline-none placeholder:text-slate-600"
-            />
-          </div>
+            <div className="shrink-0 border-t border-white/10 bg-slate-900/75">
+              <div className="flex items-center justify-between border-b border-white/10 px-4 py-2.5">
+                <span className="text-[11px] font-medium uppercase tracking-wide text-slate-400">
+                  Test against Custom Input
+                </span>
 
-          {output && (
-            <div
-              role="status"
-              className="max-h-44 shrink-0 overflow-y-auto border-t border-white/10 bg-slate-950/80 px-4 py-3"
-            >
-              <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-indigo-300">
-                Output
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => setCustomInput("")}
+                  className="text-[11px] text-slate-500 hover:text-slate-200 disabled:opacity-50"
+                >
+                  Clear
+                </button>
               </div>
 
-              <pre className="whitespace-pre-wrap break-words font-mono text-xs leading-5 text-slate-200">
-                {output}
-              </pre>
+              <textarea
+                value={customInput}
+                onChange={(event) => setCustomInput(event.target.value)}
+                disabled={busy}
+                rows={4}
+                spellCheck={false}
+                placeholder="Enter custom input here..."
+                aria-label="Custom input"
+                className="w-full resize-none bg-transparent px-4 py-3 font-mono text-xs leading-5 text-slate-300 outline-none placeholder:text-slate-600"
+              />
             </div>
-          )}
 
-          <div className="flex h-14 shrink-0 items-center justify-between border-t border-white/10 bg-slate-900/80 px-4">
+            {output && (
+              <div
+                role="status"
+                className="max-h-44 shrink-0 overflow-y-auto border-t border-white/10 bg-slate-950/80 px-4 py-3"
+              >
+                <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-indigo-300">
+                  Output
+                </div>
+
+                <pre className="whitespace-pre-wrap break-words font-mono text-xs leading-5 text-slate-200">
+                  {output}
+                </pre>
+              </div>
+            )}
+
+          </div>
+
+          <div className="relative z-10 flex h-14 shrink-0 items-center justify-between border-t border-white/10 bg-slate-900/80 px-4">
             <button
               type="button"
               onClick={handleRun}
