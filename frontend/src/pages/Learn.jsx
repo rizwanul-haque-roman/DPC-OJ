@@ -5,7 +5,7 @@ import api from "../api/axios";
 const COURSE_COLUMNS =
   "xl:grid-cols-[minmax(0,1fr)_130px_100px_190px_180px]";
 
-const COURSES_PER_PAGE = 10;
+const PAGE_SIZE_OPTIONS = [10, 25, 50];
 const FILTER_CLASS = "w-full rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2.5 text-sm text-slate-200 outline-none transition focus:border-cyan-400/60 focus:ring-2 focus:ring-cyan-400/10 disabled:opacity-50";
 
 function getCourseState(subject) {
@@ -46,12 +46,30 @@ function selectCourses(subjects, search, progressFilter, availability, sortBy) {
   });
 }
 
+function getCoursePage(items, requestedPage, requestedPageSize) {
+  const parsedSize = Number(requestedPageSize);
+  const pageSize = PAGE_SIZE_OPTIONS.includes(parsedSize) ? parsedSize : 10;
+  const pageCount = Math.max(1, Math.ceil(items.length / pageSize));
+  const parsedPage = Number(requestedPage);
+  const safePage = Number.isFinite(parsedPage) ? Math.trunc(parsedPage) : 1;
+  const currentPage = Math.max(1, Math.min(safePage, pageCount));
+  const offset = (currentPage - 1) * pageSize;
+  const visibleCourses = items.slice(offset, offset + pageSize);
+  return {
+    pageSize,
+    pageCount,
+    currentPage,
+    offset,
+    visibleCourses,
+    from: visibleCourses.length ? offset + 1 : 0,
+    to: visibleCourses.length ? offset + visibleCourses.length : 0,
+    total: items.length,
+  };
+}
+
 function CourseRow({ subject, onRetry }) {
-  const hasLessons =
-    !subject.isPlaceholder &&
-    subject.lessonCount > 0 &&
-    subject.startTopicId !== null &&
-    !subject.lessonError;
+  const courseState = getCourseState(subject);
+  const hasLessons = !["coming-soon", "unavailable"].includes(courseState);
 
   const isComplete =
     hasLessons &&
@@ -262,7 +280,11 @@ function Learn() {
   const [coursesPerPage, setCoursesPerPage] = useState(10);
 
   useEffect(() => {
-    const updateAuth = () => {
+    const updateAuth = (event) => {
+      if (event?.type === "storage" && event.key !== null && !["token", "user"].includes(event.key)) return;
+      setSubjects([]);
+      setSubjectLoading(true);
+      setSubjectError("");
       const signedIn = Boolean(localStorage.getItem("token"));
       setHasToken(signedIn);
       if (!signedIn) {
@@ -286,7 +308,6 @@ function Learn() {
     async function fetchSubjects() {
       setSubjectLoading(true);
       setSubjectError("");
-      setSubjects([]);
 
       try {
         const response = await api.get(
@@ -400,10 +421,28 @@ function Learn() {
     () => selectCourses(subjects, search, progressFilter, availability, sortBy),
     [subjects, search, progressFilter, availability, sortBy],
   );
-  const pageCount = Math.max(1, Math.ceil(filteredCourses.length / coursesPerPage),);
-  const currentPage = Math.min(page, pageCount);
-  const offset = (currentPage - 1) * COURSES_PER_PAGE;
-  const visibleCourses = filteredCourses.slice(offset,offset + coursesPerPage,);
+  const pagination = useMemo(
+    () => getCoursePage(filteredCourses, page, coursesPerPage),
+    [filteredCourses, page, coursesPerPage],
+  );
+  const { pageCount, currentPage, visibleCourses } = pagination;
+
+  useEffect(() => {
+    if (subjectLoading || subjectError) return;
+    setPage((current) => getCoursePage(filteredCourses, current, coursesPerPage).currentPage);
+  }, [filteredCourses, coursesPerPage, subjectLoading, subjectError]);
+
+  function changePageSize(value) {
+    const size = Number(value);
+    if (!PAGE_SIZE_OPTIONS.includes(size)) return;
+    setCoursesPerPage(size);
+    setPage(1);
+  }
+
+  function changePage(nextPage) {
+    setPage(getCoursePage(filteredCourses, nextPage, coursesPerPage).currentPage);
+  }
+
   const inProgressCount = subjects.filter((subject) => getCourseState(subject) === "in-progress").length;
 
   function updateControl(setter, value) {
@@ -433,8 +472,8 @@ function Learn() {
 
             <p className="mt-2 max-w-2xl text-sm leading-7 text-slate-400">
               Choose a course to start learning or continue from your
-              next incomplete lesson. Unavailable courses are marked
-              as coming soon.
+              next incomplete lesson. Courses without available lessons
+              are marked as coming soon; lesson-loading errors show Retry.
             </p>
           </div>
 
@@ -499,7 +538,7 @@ function Learn() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p role="status" className="text-xs text-slate-400">
               {subjectLoading ? "Loading courses..." : subjectError ? "Unable to load results." :
-                `Showing ${filteredCourses.length ? offset + 1 : 0}–${Math.min(offset + COURSES_PER_PAGE, filteredCourses.length)} of ${filteredCourses.length} matching courses (${subjects.length} total)`}
+                `Showing ${pagination.from}–${pagination.to} of ${pagination.total} matching courses (${subjects.length} total)`}
             </p>
             <div className="flex flex-wrap gap-2">
               {hasToken && inProgressCount > 0 && (
@@ -518,27 +557,6 @@ function Learn() {
                   In progress ({inProgressCount})
                 </button>
               )}
-              <label className="flex items-center gap-2 text-xs text-slate-400">
-                Courses per page
-
-                <select
-                  value={coursesPerPage}
-                  onChange={(event) => {
-                    const value = Number(event.target.value);
-
-                    if (![10, 25, 50].includes(value)) return;
-
-                    setCoursesPerPage(value);
-                    setPage(1);
-                  }}
-                  className="rounded-lg border border-white/10 bg-slate-950 px-2 py-1.5 text-xs text-slate-200 outline-none focus:border-cyan-400/60"
-                >
-                  <option value={5}>5</option>
-                  <option value={10}>10</option>
-                  <option value={25}>25</option>
-                  <option value={50}>50</option>
-                </select>
-              </label>
               <button type="button" onClick={resetControls} className="rounded-lg border border-white/10 px-3 py-1.5 text-xs text-slate-300 hover:bg-white/5">
                 Reset filters
               </button>
@@ -607,16 +625,27 @@ function Learn() {
                 />
               ))}
             </div>
-            {pageCount > 1 && (
-              <nav aria-label="Course pages" className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4">
-                <span className="text-xs text-slate-400">Page {currentPage} of {pageCount}</span>
-                <div className="flex gap-2">
-                  <button type="button" disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)} className="rounded-xl border border-white/10 px-3 py-2 text-xs text-slate-300 hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-40">Previous</button>
-                  <button type="button" disabled={currentPage === pageCount} onClick={() => setPage(currentPage + 1)} className="rounded-xl border border-white/10 px-3 py-2 text-xs text-slate-300 hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-40">Next</button>
-                </div>
-              </nav>
-            )}
+
           </>
+        )}
+        {!subjectLoading && !subjectError && (
+          <nav aria-label="Course pages" className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4">
+            <span className="text-xs text-slate-400">Page {currentPage} of {pageCount}</span>
+            <div className="flex flex-wrap gap-2">
+              <label className="flex items-center gap-2 text-xs text-slate-400">
+                Courses per page
+                <select
+                  value={coursesPerPage}
+                  onChange={(event) => changePageSize(event.target.value)}
+                  className="rounded-lg border border-white/10 bg-slate-950 px-2 py-1.5 text-xs text-slate-200 outline-none focus:border-cyan-400/60"
+                >
+                  {PAGE_SIZE_OPTIONS.map((size) => <option key={size} value={size}>{size}</option>)}
+                </select>
+              </label>
+              <button type="button" disabled={currentPage <= 1} onClick={() => changePage(currentPage - 1)} className="rounded-xl border border-white/10 px-3 py-2 text-xs text-slate-300 hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-40">Previous</button>
+              <button type="button" disabled={currentPage >= pageCount} onClick={() => changePage(currentPage + 1)} className="rounded-xl border border-white/10 px-3 py-2 text-xs text-slate-300 hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-40">Next</button>
+            </div>
+          </nav>
         )}
       </section>
     </div>
