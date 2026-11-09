@@ -804,19 +804,14 @@ export default function AdminProblems() {
               hidden cases must remain server-side.
             </p>
 
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: 16,
-              }}
-            >
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               {form.test_cases.map((tc, index) => (
                 <div
                   key={index}
                   className="pd-panel"
                   style={{
                     padding: 16,
+                    minWidth: 0,
                     backgroundColor: "#ffffff05",
                     border: "1px solid #ffffff0a",
                   }}
@@ -848,14 +843,14 @@ export default function AdminProblems() {
                   </div>
 
                   <div
-                    className="pd-row"
                     style={{
-                      alignItems: "flex-start",
+                      display: "flex",
+                      flexDirection: "column",
                       marginTop: 12,
                       gap: 16,
                     }}
                   >
-                    <label style={{ flex: "1 1 250px", minWidth: 0 }}>
+                    <label style={{ width: "100%", minWidth: 0 }}>
                       <div className="pd-note" style={{ marginBottom: 6 }}>
                         Input
                       </div>
@@ -864,14 +859,14 @@ export default function AdminProblems() {
                         onChange={(event) =>
                           updateCase(index, "input", event.target.value)
                         }
-                        rows={5}
+                        rows={3}
                         spellCheck={false}
                         className="pd-input"
                         style={{ fontFamily: "monospace", fontSize: 13 }}
                       />
                     </label>
 
-                    <label style={{ flex: "1 1 250px", minWidth: 0 }}>
+                    <label style={{ width: "100%", minWidth: 0 }}>
                       <div className="pd-note" style={{ marginBottom: 6 }}>
                         Expected output
                       </div>
@@ -884,7 +879,7 @@ export default function AdminProblems() {
                             event.target.value,
                           )
                         }
-                        rows={5}
+                        rows={3}
                         spellCheck={false}
                         className="pd-input"
                         style={{ fontFamily: "monospace", fontSize: 13 }}
