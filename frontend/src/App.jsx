@@ -27,6 +27,9 @@ import ResetPassword from "./pages/ResetPassword";
 function App() {
   const location = useLocation();
 
+  const isAdminRoute =
+    location.pathname === "/admin" || location.pathname.startsWith("/admin/");
+
   const getPageTitle = () => {
     const path = location.pathname;
 
@@ -57,7 +60,7 @@ function App() {
     if (path.startsWith("/forgot-password")) return "Forgot Password";
     if (path.startsWith("/reset-password")) return "Reset Password";
 
-    // return "Problems";
+    return "Problems";
   };
 
   const getPageSubtitle = () => {
@@ -84,7 +87,8 @@ function App() {
     if (path.startsWith("/admin")) return "Admin Dashboard";
     if (path.startsWith("/login"))
       return "Access your futuristic coding workspace";
-    if (path.startsWith("/verify-email")) return "Enter the code sent to your email to finish registration";
+    if (path.startsWith("/verify-email"))
+      return "Enter the code sent to your email to finish registration";
     if (path.startsWith("/register"))
       return "Create your account and start solving";
     if (path.startsWith("/submissions"))
@@ -106,7 +110,7 @@ function App() {
     if (path.startsWith("/reset-password"))
       return "Set a new password and secure your account";
 
-    // return "Browse challenges and sharpen your problem solving";
+    return "Browse challenges and sharpen your problem solving";
   };
 
   return (
@@ -114,23 +118,27 @@ function App() {
       <Navbar />
 
       <main className="app-main flex-1 p-4 md:p-6">
-        <div className="mb-6 flex flex-col gap-4 rounded-[22px] border border-white/10 bg-slate-900/50 p-5 shadow-2xl backdrop-blur-xl lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight text-white">
-              {getPageTitle()}
-            </h1>
-            <p className="mt-1 text-sm text-slate-400">{getPageSubtitle()}</p>
-          </div>
+        {!isAdminRoute && (
+          <div className="mb-6 flex flex-col gap-4 rounded-[22px] border border-white/10 bg-slate-900/50 p-5 shadow-2xl backdrop-blur-xl lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight text-white">
+                {getPageTitle()}
+              </h1>
 
-          <div className="flex flex-wrap gap-2">
-            <span className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-slate-300">
-              DPC-OJ
-            </span>
-            <span className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-slate-300">
-              V.1.0
-            </span>
+              <p className="mt-1 text-sm text-slate-400">{getPageSubtitle()}</p>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-slate-300">
+                DPC-OJ
+              </span>
+
+              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-slate-300">
+                V.1.0
+              </span>
+            </div>
           </div>
-        </div>
+        )}
 
         <Routes>
           <Route path="/" element={<Problems />} />

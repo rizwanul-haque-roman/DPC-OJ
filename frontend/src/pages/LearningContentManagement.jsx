@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import api from "../api/axios";
 import LessonEditor from "../components/LessonEditor";
+import AdminPageHeader from "../components/AdminPageHeader";
 
 const panel =
   "rounded-3xl border border-white/10 bg-slate-900/50 p-5 shadow-2xl sm:p-6";
@@ -546,33 +547,25 @@ export default function LearningContentManagement() {
         </div>
       )}
 
-      <section className={panel}>
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <h2 className="text-xl font-bold text-white">
-              Learning workspace
-            </h2>
-            <p className="mt-2 text-sm leading-6 text-slate-400">
-              Manage courses directly, then create and edit lessons
-              inside each course.
-            </p>
-          </div>
-
+      <AdminPageHeader
+        title="Learning Content Management"
+        description="Manage courses directly, then create and edit lessons inside each course."
+        actions={
           <button
             type="button"
             disabled={disabled}
             onClick={refreshWorkspace}
-            className={neutral}
+            className={primary}
           >
             <RefreshCw
               size={15}
               className={loading ? "animate-spin" : ""}
+              aria-hidden="true"
             />
             Refresh
           </button>
-        </div>
-
-      </section>
+        }
+      />
 
       {courseForm && (
         <section ref={courseFormSectionRef} className={panel}>
