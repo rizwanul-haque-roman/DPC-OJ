@@ -77,7 +77,7 @@ function StatusBadge({ status }) {
     },
     ended: {
       label: "Finished",
-      className: "border-slate-400/20 bg-slate-400/10 text-slate-300",
+      className: "border-rose-400/20 bg-rose-400/10 text-rose-300",
     },
     invalid: {
       label: "Schedule unavailable",
@@ -360,7 +360,7 @@ export default function Contests() {
               {
                 label: "Finished",
                 value: counts.ended,
-                color: "text-slate-300",
+                color: "text-rose-300",
               },
             ].map((stat) => (
               <div

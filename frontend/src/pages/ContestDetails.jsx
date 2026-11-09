@@ -74,7 +74,7 @@ function statusStyle(status) {
   }
 
   if (status === "ended") {
-    return "border-slate-400/20 bg-slate-400/10 text-slate-300";
+    return "border-rose-400/20 bg-rose-400/10 text-rose-300";
   }
 
   return "border-amber-400/20 bg-amber-400/10 text-amber-200";
@@ -304,7 +304,10 @@ function ContestDetails() {
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-300">
                 DPC-OJ Contest #{contest.id}
               </p>
+            </div>
 
+            <h2 className="mt-4 flex flex-wrap items-center gap-3 break-words text-2xl font-bold text-white sm:text-3xl">
+              <span>{contest.title || "Untitled contest"}</span>
               <span
                 className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold ${statusStyle(
                   status,
@@ -319,10 +322,6 @@ function ContestDetails() {
 
                 {STATUS_LABELS[status]}
               </span>
-            </div>
-
-            <h2 className="mt-4 break-words text-2xl font-bold text-white sm:text-3xl">
-              {contest.title || "Untitled contest"}
             </h2>
 
             <p className="mt-4 whitespace-pre-wrap break-words text-sm leading-7 text-slate-400">
@@ -448,7 +447,7 @@ function ContestDetails() {
             </div>
 
             {status === "ended" && (
-              <p className="mt-5 text-sm text-slate-400">
+              <p className="mt-5 text-sm text-rose-400">
                 This contest has finished.
               </p>
             )}
