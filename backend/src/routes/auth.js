@@ -5,388 +5,152 @@ const jwt = require("jsonwebtoken");
 const db = require("../db");
 const crypto = require("crypto");
 const { sendPasswordResetEmail } = require("../utils/mailer");
-
-
-const USERNAME_PATTERN = /^[a-zA-Z0-9_-]{3,30}$/;
-
+const { readCredentials, registrationId, consumeQuota, sendAuthError, httpError, assertSecrets } = require("../utils/registrationSecurity");
+const { beginRegistration, resumeRegistration, resendRegistration, completeRegistration, cancelRegistration } = require("../services/registrationOtp");
 
 function createToken(user) {
-  return jwt.sign(
-    {
-      userId: user.id,
-      role: user.role,
-      tokenVersion: Number(user.token_version || 0),
-    },
-    process.env.JWT_SECRET,
-    {
-      expiresIn: "7d",
-    },
-  );
+  return jwt.sign({ userId: user.id, role: user.role, tokenVersion: Number(user.token_version || 0) },
+    process.env.JWT_SECRET, { expiresIn: "7d" });
 }
 
-
-router.post("/register", async (req, res) => {
-  const username = String(req.body.username || req.body.name || "").trim();
-  const email = String(req.body.email || "").trim().toLowerCase();
-  const password = String(req.body.password || "");
-
-
-  if (!username || !email || !password) {
-    return res.status(400).json({
-      error: "Username, email, and password are required.",
-    });
-  }
-
-
-  if (!USERNAME_PATTERN.test(username)) {
-    return res.status(400).json({
-      error:
-        "Username must be 3-30 characters and may contain only letters, numbers, underscores, and hyphens.",
-    });
-  }
-
-
-  if (password.length < 6) {
-    return res.status(400).json({
-      error: "Password must be at least 6 characters long.",
-    });
-  }
-
-
-  try {
-    const [existing] = await db.execute(
-      `SELECT id, name, email
-       FROM users
-       WHERE LOWER(name) = LOWER(?) OR LOWER(email) = LOWER(?)
-       LIMIT 1`,
-      [username, email],
-    );
-
-
-    if (existing.length > 0) {
-      const existingUser = existing[0];
-
-
-      if (existingUser.name.toLowerCase() === username.toLowerCase()) {
-        return res.status(409).json({
-          error: "Username is already taken.",
-        });
+function authRoute(handler) {
+  return async (req, res) => {
+    res.set("Cache-Control", "no-store");
+    try { return await handler(req, res); }
+    catch (error) {
+      if (error.code === "ER_DUP_ENTRY") {
+        error = httpError(409, "ACCOUNT_EXISTS", "Username or email is already registered. Please use different details.");
       }
-
-
-      return res.status(409).json({
-        error: "Email is already registered.",
-      });
+      return sendAuthError(res, error, "Authentication request failed");
     }
+  };
+}
 
+const ipFor = (req) => req.ip || req.socket?.remoteAddress || "unknown";
 
-    const passwordHash = await bcrypt.hash(password, 10);
+router.post("/register", authRoute(async (req, res) => {
+  const credentials = readCredentials(req.body, true);
+  await consumeQuota("register-ip", ipFor(req), 30, 900);
+  await consumeQuota("register-email", credentials.email, 5, 3600);
+  const result = await beginRegistration(credentials);
+  return res.status(202).json(result);
+}));
 
+router.post("/verify-email", authRoute(async (req, res) => {
+  const id = registrationId(req.body?.registration_id);
+  await consumeQuota("verify-ip", ipFor(req), 60, 900);
+  const result = await completeRegistration(id, req.body?.otp, createToken);
+  return res.status(201).json(result);
+}));
 
-    const [result] = await db.execute(
-      `INSERT INTO users
-        (name, email, password_hash, role, status)
-       VALUES (?, ?, ?, 'student', 'active')`,
-      [username, email, passwordHash],
-    );
+router.post("/resend-verification", authRoute(async (req, res) => {
+  const id = registrationId(req.body?.registration_id);
+  await consumeQuota("resend-ip", ipFor(req), 20, 900);
+  return res.json(await resendRegistration(id));
+}));
 
+router.post("/cancel-registration", authRoute(async (req, res) => {
+  const id = registrationId(req.body?.registration_id);
+  await consumeQuota("cancel-ip", ipFor(req), 30, 900);
+  return res.json(await cancelRegistration(id));
+}));
 
-    const user = {
-      id: result.insertId,
-      name: username,
-      email,
-      role: "student",
-      status: "active",
-    };
-
-
-    const token = createToken(user);
-
-
-    return res.status(201).json({
-      token,
-      user,
-    });
-  } catch (err) {
-    console.error("Registration error:", err);
-
-
-    if (err.code === "ER_DUP_ENTRY") {
-      return res.status(409).json({
-        error: "Username or email is already registered.",
-      });
-    }
-
-
-    return res.status(500).json({
-      error: "Unable to create account.",
-    });
+router.post("/login", authRoute(async (req, res) => {
+  const { email, password } = readCredentials(req.body);
+  await consumeQuota("login-ip", ipFor(req), 60, 900);
+  await consumeQuota("login-email", email, 20, 900);
+  const [rows] = await db.execute(
+    `SELECT id, name, email, password_hash, role, token_version, status, email_verification_status
+     FROM users WHERE email = ? LIMIT 1`, [email],
+  );
+  const user = rows[0];
+  if (!user) {
+    const pending = await resumeRegistration(email, password);
+    if (pending) return res.status(202).json(pending);
+    throw httpError(401, "INVALID_LOGIN", "Invalid email or password.");
   }
-});
-
-
-router.post("/login", async (req, res) => {
-  const email = String(req.body.email || "").trim().toLowerCase();
-  const password = String(req.body.password || "");
-
-
-  if (!email || !password) {
-    return res.status(400).json({
-      error: "Email and password are required.",
-    });
+  if (!(await bcrypt.compare(password, user.password_hash))) {
+    throw httpError(401, "INVALID_LOGIN", "Invalid email or password.");
   }
-
-
-  try {
-    const [rows] = await db.execute(
-      `SELECT
-        id,
-        name,
-        email,
-        password_hash,
-        role,
-        token_version,
-        status
-      FROM users
-      WHERE LOWER(email) = LOWER(?)
-      LIMIT 1`,
-      [email],
-    );
-
-
-    if (rows.length === 0) {
-      return res.status(401).json({
-        error: "Invalid email or password.",
-      });
-    }
-
-
-    const user = rows[0];
-
-
-    const validPassword = await bcrypt.compare(password, user.password_hash);
-
-
-    if (!validPassword) {
-      return res.status(401).json({
-        error: "Invalid email or password.",
-      });
-    }
-
-
-    if (user.status !== "active") {
-      const errorMessage =
-        user.status === "suspended"
-          ? "This account has been suspended. Please contact an administrator."
-          : "This account is no longer available. Please contact an administrator.";
-
-
-      return res.status(403).json({
-        error: errorMessage,
-      });
-    }
-
-
-    const safeUser = {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      status: user.status,
-    };
-
-
-    const token = createToken(user);
-
-
-    return res.json({
-      token,
-      user: safeUser,
-    });
-  } catch (err) {
-    console.error("Login error:", err);
-
-
-    return res.status(500).json({
-      error: "Unable to log in.",
-    });
+  if (user.status !== "active") {
+    throw httpError(403, "ACCOUNT_UNAVAILABLE", user.status === "suspended"
+      ? "This account has been suspended. Please contact an administrator."
+      : "This account is no longer available. Please contact an administrator.");
   }
-});
+  if (!["verified", "legacy_approved"].includes(user.email_verification_status)) {
+    throw httpError(403, "EMAIL_NOT_VERIFIED", "This account is not approved for login. Please contact support to verify your email.");
+  }
+  const safeUser = { id: user.id, name: user.name, email: user.email, role: user.role, status: user.status, email_verification_status: user.email_verification_status };
+  return res.json({ token: createToken(user), user: safeUser });
+}));
+
 
 
 router.post("/forgot-password", async (req, res) => {
+  res.set("Cache-Control", "no-store");
   try {
-    const email = String(req.body?.email || "")
-      .trim()
-      .toLowerCase();
-
-
-    if (!email || email.length > 255) {
-      return res.status(400).json({
-        error: "Enter a valid email address.",
-      });
-    }
-
-
+    const email = String(req.body?.email || "").trim().toLowerCase();
+    if (!email || email.length > 255) return res.status(400).json({ error: "Enter a valid email address." });
+    await consumeQuota("forgot-ip", ipFor(req), 10, 900);
+    await consumeQuota("forgot-email", email, 3, 3600);
     const [users] = await db.execute(
-      `SELECT id, email, display_name, name
-       FROM users
-       WHERE email = ? AND status = 'active'
-       LIMIT 1`,
-      [email],
+      `SELECT id, email, display_name, name FROM users WHERE email = ? AND status = 'active'
+       AND email_verification_status IN ('verified', 'legacy_approved') LIMIT 1`, [email],
     );
-
-
-    const genericResponse = {
-      message:
-        "If an account exists for this email, a password reset link has been sent.",
-    };
-
-
-    if (users.length === 0) {
-      return res.json(genericResponse);
-    }
-
-
+    const genericResponse = { message: "If an account exists for this email, a password reset link has been sent." };
+    if (!users.length) return res.json(genericResponse);
     const user = users[0];
-
-
-    await db.execute(
-      `UPDATE password_resets
-       SET used_at = NOW(3)
-       WHERE user_id = ? AND used_at IS NULL`,
-      [user.id],
-    );
-
-
+    await db.execute("UPDATE password_resets SET used_at = NOW(3) WHERE user_id = ? AND used_at IS NULL", [user.id]);
     const token = crypto.randomBytes(32).toString("hex");
-    const tokenHash = crypto
-      .createHash("sha256")
-      .update(token)
-      .digest("hex");
-
-
+    const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
     await db.execute(
-      `INSERT INTO password_resets
-        (user_id, token_hash, expires_at)
-       VALUES (?, ?, DATE_ADD(NOW(3), INTERVAL 30 MINUTE))`,
-      [user.id, tokenHash],
+      `INSERT INTO password_resets (user_id, token_hash, expires_at)
+       VALUES (?, ?, DATE_ADD(NOW(3), INTERVAL 30 MINUTE))`, [user.id, tokenHash],
     );
-
-
     const resetUrl = `${process.env.APP_URL}/reset-password?token=${token}`;
-
-
     await sendPasswordResetEmail(user.email, resetUrl);
-
-
     return res.json(genericResponse);
   } catch (error) {
-    console.error("Forgot password error:", error);
-
-
-    return res.status(500).json({
-      error: "Unable to process password reset request.",
-    });
+    return sendAuthError(res, error, "Forgot password error");
   }
 });
-
 
 router.post("/reset-password", async (req, res) => {
+  res.set("Cache-Control", "no-store");
   try {
+    await consumeQuota("reset-ip", ipFor(req), 30, 900);
     const token = String(req.body?.token || "");
     const newPassword = String(req.body?.new_password || "");
-
-
-    if (!/^[a-f0-9]{64}$/i.test(token)) {
-      return res.status(400).json({
-        error: "Invalid or expired password reset link.",
-      });
+    if (!/^[a-f0-9]{64}$/i.test(token)) return res.status(400).json({ error: "Invalid or expired password reset link." });
+    if (newPassword.length < 8 || Buffer.byteLength(newPassword, "utf8") > 72) {
+      return res.status(400).json({ error: "Use a password of at least 8 characters and no more than 72 UTF-8 bytes." });
     }
-
-
-    if (
-      newPassword.length < 8 ||
-      Buffer.byteLength(newPassword, "utf8") > 72
-    ) {
-      return res.status(400).json({
-        error:
-          "Use a password of at least 8 characters and no more than 72 UTF-8 bytes.",
-      });
-    }
-
-
-    const tokenHash = crypto
-      .createHash("sha256")
-      .update(token)
-      .digest("hex");
-
-
-    const [records] = await db.execute(
-      `SELECT pr.id, pr.user_id, pr.expires_at, pr.used_at
-       FROM password_resets pr
-       INNER JOIN users u ON u.id = pr.user_id
-       WHERE pr.token_hash = ?
-         AND u.status = 'active'
-       LIMIT 1`,
-      [tokenHash],
-    );
-
-
-    const record = records[0];
-
-
-    if (
-      !record ||
-      record.used_at ||
-      new Date(record.expires_at).getTime() <= Date.now()
-    ) {
-      return res.status(400).json({
-        error: "Invalid or expired password reset link.",
-      });
-    }
-
-
+    const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+    const { transaction } = require("../utils/registrationSecurity");
     const hash = await bcrypt.hash(newPassword, 10);
-
-
-    const [updated] = await db.execute(
-      `UPDATE users
-       SET password_hash = ?,
-           token_version = token_version + 1
-       WHERE id = ? AND status = 'active'`,
-      [hash, record.user_id],
-    );
-
-
-    if (!updated.affectedRows) {
-      return res.status(409).json({
-        error: "Unable to reset password. Please request a new link.",
-      });
-    }
-
-
-    await db.execute(
-      `UPDATE password_resets
-       SET used_at = NOW(3)
-       WHERE id = ?`,
-      [record.id],
-    );
-
-
-    return res.json({
-      message:
-        "Password reset successfully. Please sign in with your new password.",
+    const completed = await transaction(async (connection) => {
+      const [records] = await connection.execute(
+        `SELECT pr.id, pr.user_id FROM password_resets pr
+         INNER JOIN users u ON u.id = pr.user_id
+         WHERE pr.token_hash = ? AND pr.used_at IS NULL AND pr.expires_at > NOW(3)
+           AND u.status = 'active' AND u.email_verification_status IN ('verified', 'legacy_approved')
+         LIMIT 1 FOR UPDATE`, [tokenHash],
+      );
+      if (!records.length) return false;
+      const record = records[0];
+      const [updated] = await connection.execute(
+        `UPDATE users SET password_hash = ?, token_version = token_version + 1
+         WHERE id = ? AND status = 'active'`, [hash, record.user_id],
+      );
+      if (!updated.affectedRows) throw httpError(409, "RESET_FAILED", "Unable to reset password. Request a new link.");
+      await connection.execute("UPDATE password_resets SET used_at = NOW(3) WHERE user_id = ? AND used_at IS NULL", [record.user_id]);
+      return true;
     });
+    if (!completed) return res.status(400).json({ error: "Invalid or expired password reset link." });
+    return res.json({ message: "Password reset successfully. Please sign in with your new password." });
   } catch (error) {
-    console.error("Reset password error:", error);
-
-
-    return res.status(500).json({
-      error: "Unable to reset password.",
-    });
+    return sendAuthError(res, error, "Reset password error");
   }
 });
-
 
 module.exports = router;

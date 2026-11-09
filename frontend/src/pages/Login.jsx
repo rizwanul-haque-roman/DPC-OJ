@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import api from "../api/axios";
 import PasswordInput from "../components/PasswordInput";
+import { saveRegistrationSession, finishLogin } from "../utils/registrationSession";
 
 function Login() {
   const [formData, setFormData] = useState({
@@ -11,6 +12,7 @@ function Login() {
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const navigate = useNavigate();
+  const inFlight = useRef(false);
 
   const handleChange = (e) => {
     setFormData({
@@ -21,6 +23,8 @@ function Login() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (inFlight.current) return;
+    inFlight.current = true;
     setError("");
 
     setSubmitting(true);
@@ -28,14 +32,18 @@ function Login() {
     try {
       const res = await api.post("/auth/login", formData);
 
-      localStorage.setItem("token", res.data.token);
-      localStorage.setItem("user", JSON.stringify(res.data.user));
-      window.dispatchEvent(new Event("authChanged"));
-
+      if (res.data?.verification_required) {
+        const registration = saveRegistrationSession(res.data);
+        setFormData((current) => ({ ...current, password: "" }));
+        navigate("/verify-email", { state: { registration } });
+        return;
+      }
+      finishLogin(res.data);
       navigate("/problems");
     } catch (err) {
       setError(err.response?.data?.error || "Login failed");
     } finally {
+      inFlight.current = false;
       setSubmitting(false);
     }
   };

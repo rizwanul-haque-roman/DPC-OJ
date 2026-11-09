@@ -1,6 +1,7 @@
 import { Routes, Route, useLocation } from "react-router-dom";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import VerifyEmail from "./pages/VerifyEmail";
 import Problems from "./pages/Problems";
 import ProblemDetails from "./pages/ProblemDetails";
 import Submissions from "./pages/Submissions";
@@ -43,6 +44,7 @@ function App() {
       return "Learning Content Management";
     if (path.startsWith("/admin")) return "Admin Dashboard";
     if (path.startsWith("/login")) return "Login";
+    if (path.startsWith("/verify-email")) return "Verify your email";
     if (path.startsWith("/register")) return "Register";
     if (path.startsWith("/submissions")) return "Submissions";
     if (path.startsWith("/learn/topic/")) return "Learn Topic";
@@ -82,6 +84,7 @@ function App() {
     if (path.startsWith("/admin")) return "Admin Dashboard";
     if (path.startsWith("/login"))
       return "Access your futuristic coding workspace";
+    if (path.startsWith("/verify-email")) return "Enter the code sent to your email to finish registration";
     if (path.startsWith("/register"))
       return "Create your account and start solving";
     if (path.startsWith("/submissions"))
@@ -162,6 +165,7 @@ function App() {
           <Route path="/learn/topic/:topicId" element={<LearnTopic />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/verify-email" element={<VerifyEmail />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
         </Routes>
