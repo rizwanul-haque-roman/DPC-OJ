@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
+import { RefreshCw } from "lucide-react";
 import api from "../api/axios";
+import AdminPageHeader from "../components/AdminPageHeader";
 import "../components/ProfileDashboard.css";
-
 
 const initialFilters = {
   search: "",
@@ -17,13 +18,9 @@ const initialFilters = {
   page_size: "10",
 };
 
-
 function readable(value) {
-  return value
-    ? String(value).replaceAll("_", " ")
-    : "Not recorded";
+  return value ? String(value).replaceAll("_", " ") : "Not recorded";
 }
-
 
 function timestamp(value) {
   if (!value) return "Not recorded";
@@ -46,13 +43,13 @@ function timestamp(value) {
   });
 }
 
-
 function Outcome({ value }) {
-  const color = {
-    success: "#6ee7b7",
-    failure: "#fda4af",
-    denied: "#fcd34d",
-  }[value] || "#94a3b8";
+  const color =
+    {
+      success: "#6ee7b7",
+      failure: "#fda4af",
+      denied: "#fcd34d",
+    }[value] || "#94a3b8";
 
   return (
     <span
@@ -71,7 +68,6 @@ function Outcome({ value }) {
     </span>
   );
 }
-
 
 function JsonValue({ value }) {
   return (
@@ -97,7 +93,6 @@ function JsonValue({ value }) {
   );
 }
 
-
 function FilterField({ label, children }) {
   return (
     <label className="pd-label">
@@ -106,7 +101,6 @@ function FilterField({ label, children }) {
     </label>
   );
 }
-
 
 export default function AdminAuditLogs() {
   const [draft, setDraft] = useState({ ...initialFilters });
@@ -158,7 +152,9 @@ export default function AdminAuditLogs() {
           );
         }
       } finally {
-        if (!controller.signal.aborted) setLoading(false);
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
       }
     }
 
@@ -189,8 +185,7 @@ export default function AdminAuditLogs() {
       } catch (e) {
         if (!controller.signal.aborted) {
           setDetailError(
-            e.response?.data?.error ||
-              "Unable to load audit event.",
+            e.response?.data?.error || "Unable to load audit event.",
           );
         }
       } finally {
@@ -234,7 +229,10 @@ export default function AdminAuditLogs() {
         "outcome",
       ]) {
         const value = draft[key].trim();
-        if (value) params[key] = value;
+
+        if (value) {
+          params[key] = value;
+        }
       }
 
       for (const key of ["from", "to"]) {
@@ -272,8 +270,8 @@ export default function AdminAuditLogs() {
     setSelectedId(null);
     setQuery({
       page: "1",
-      page_size: "25",
-      sort: "newest",
+      page_size: initialFilters.page_size,
+      sort: initialFilters.sort,
     });
   }
 
@@ -302,29 +300,25 @@ export default function AdminAuditLogs() {
 
   return (
     <div className="space-y-6">
-      <section className="pd-panel">
-        <div className="pd-row">
-          <div>
-            <h1 className="pd-title" style={{ fontSize: 24 }}>
-              Administrative Audit Logs
-            </h1>
-            <p className="pd-note" style={{ marginTop: 8 }}>
-              Search administrative actions and inspect recorded
-              changes. Historical events cannot be edited or
-              deleted through this page.
-            </p>
-          </div>
-
+      <AdminPageHeader
+        title="Administrative Audit Logs"
+        description="Search administrative actions and inspect recorded changes. Historical events cannot be edited or deleted through this page."
+        actions={
           <button
             type="button"
-            className="pd-button"
             disabled={loading}
             onClick={() => setRefresh((value) => value + 1)}
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-cyan-400/20 bg-cyan-400/10 px-4 py-3 text-sm font-semibold text-cyan-200 transition hover:bg-cyan-400/20 disabled:cursor-not-allowed disabled:opacity-40"
           >
+            <RefreshCw
+              size={15}
+              className={loading ? "animate-spin" : ""}
+              aria-hidden="true"
+            />
             {loading ? "Loading…" : "Refresh"}
           </button>
-        </div>
-      </section>
+        }
+      />
 
       <form className="pd-panel" onSubmit={applyFilters}>
         <h2 className="pd-title">Search and filters</h2>
@@ -363,18 +357,12 @@ export default function AdminAuditLogs() {
               onChange={updateDraft}
             >
               <option value="">All categories</option>
-              <option value="user_management">
-                User management
-              </option>
-              <option value="problem_management">
-                Problem management
-              </option>
+              <option value="user_management">User management</option>
+              <option value="problem_management">Problem management</option>
               <option value="test_case_management">
                 Test-case management
               </option>
-              <option value="contest_management">
-                Contest management
-              </option>
+              <option value="contest_management">Contest management</option>
               <option value="security">Security</option>
               <option value="uncategorized">
                 Uncategorized / historical
@@ -512,6 +500,7 @@ export default function AdminAuditLogs() {
       <section className="pd-panel">
         <div className="pd-row">
           <h2 className="pd-title">Audit events</h2>
+
           <span className="pd-note" role="status">
             {loading
               ? "Loading events…"
@@ -526,10 +515,7 @@ export default function AdminAuditLogs() {
           style={{ marginTop: 14 }}
           aria-busy={loading}
         >
-          <table
-            className="pd-table"
-            style={{ minWidth: 1250 }}
-          >
+          <table className="pd-table" style={{ minWidth: 1250 }}>
             <thead>
               <tr>
                 {[
@@ -557,9 +543,7 @@ export default function AdminAuditLogs() {
                 </tr>
               ) : !data ? (
                 <tr>
-                  <td colSpan={9}>
-                    Unable to display audit events.
-                  </td>
+                  <td colSpan={9}>Unable to display audit events.</td>
                 </tr>
               ) : rows.length === 0 ? (
                 <tr>
@@ -580,9 +564,11 @@ export default function AdminAuditLogs() {
                       <div style={{ color: "#f1f5f9" }}>
                         {item.admin_name || "Not recorded"}
                       </div>
+
                       <div className="pd-note">
                         {item.admin_email || "Email not recorded"}
                       </div>
+
                       <div className="pd-note">
                         {item.admin_id == null
                           ? "Administrator ID not recorded"
@@ -594,6 +580,7 @@ export default function AdminAuditLogs() {
                       <div style={{ color: "#a5f3fc" }}>
                         {readable(item.action)}
                       </div>
+
                       <div className="pd-note">
                         {readable(item.category)}
                       </div>
@@ -661,8 +648,7 @@ export default function AdminAuditLogs() {
                 type="button"
                 className="pd-button"
                 disabled={
-                  loading ||
-                  pagination.page >= pagination.total_pages
+                  loading || pagination.page >= pagination.total_pages
                 }
                 onClick={() =>
                   setQuery((previous) => ({
@@ -685,10 +671,7 @@ export default function AdminAuditLogs() {
           aria-busy={detailLoading}
         >
           <div className="pd-row">
-            <h2
-              id="audit-event-heading"
-              className="pd-title"
-            >
+            <h2 id="audit-event-heading" className="pd-title">
               Event #{selectedId}
             </h2>
 
@@ -731,6 +714,7 @@ export default function AdminAuditLogs() {
                     }}
                   >
                     <dt className="pd-note">{label}</dt>
+
                     <dd
                       style={{
                         margin: "6px 0 0",
@@ -755,24 +739,20 @@ export default function AdminAuditLogs() {
                 style={{ marginTop: 22 }}
               >
                 <div>
-                  <h3 className="pd-title">
-                    Previous and new values
-                  </h3>
+                  <h3 className="pd-title">Previous and new values</h3>
                   <JsonValue value={event.changes} />
                 </div>
 
                 <div>
-                  <h3 className="pd-title">
-                    Additional metadata
-                  </h3>
+                  <h3 className="pd-title">Additional metadata</h3>
                   <JsonValue value={event.details} />
                 </div>
               </div>
 
               <p className="pd-note">
-                Missing historical identity snapshots may fall
-                back to the current account identity. Missing
-                metadata is displayed as “Not recorded.”
+                Missing historical identity snapshots may fall back to
+                the current account identity. Missing metadata is
+                displayed as “Not recorded.”
               </p>
             </>
           )}

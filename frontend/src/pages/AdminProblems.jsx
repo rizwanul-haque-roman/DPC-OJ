@@ -8,6 +8,7 @@ import {
 import { Link, useSearchParams } from "react-router-dom";
 import api from "../api/axios";
 import "../components/ProfileDashboard.css";
+import AdminPageHeader from "../components/AdminPageHeader";
 
 const BASE = "/admin/problems";
 
@@ -76,6 +77,7 @@ export default function AdminProblems() {
       if (/^(auto|scroll|overlay)$/.test(getComputedStyle(owner).overflowY)) {
         break;
       }
+
       owner = owner.parentElement;
     }
 
@@ -92,7 +94,9 @@ export default function AdminProblems() {
     const originals = new Map();
 
     function setStyle(element, property, value) {
-      if (!originals.has(element)) originals.set(element, new Map());
+      if (!originals.has(element)) {
+        originals.set(element, new Map());
+      }
 
       const properties = originals.get(element);
 
@@ -131,7 +135,9 @@ export default function AdminProblems() {
 
     const observer = new ResizeObserver(fitScrollOwner);
 
-    if (owner.parentElement) observer.observe(owner.parentElement);
+    if (owner.parentElement) {
+      observer.observe(owner.parentElement);
+    }
 
     return () => {
       window.removeEventListener("resize", fitScrollOwner);
@@ -193,9 +199,13 @@ export default function AdminProblems() {
         setProblems(problemResponse.data);
         setSubjects(subjectResponse.data);
       } catch (err) {
-        if (active) setError(errorMessage(err));
+        if (active) {
+          setError(errorMessage(err));
+        }
       } finally {
-        if (active) setLoading(false);
+        if (active) {
+          setLoading(false);
+        }
       }
     }
 
@@ -265,11 +275,13 @@ export default function AdminProblems() {
 
   function closeEditor() {
     if (busy) return;
+
     setFormOpen(false);
   }
 
   function resumeEditor() {
     if (busy || loading) return;
+
     setFormOpen(true);
     scrollToPageTop();
   }
@@ -310,9 +322,7 @@ export default function AdminProblems() {
       const { data } = await api.delete(`${BASE}/${problem.id}`);
 
       setProblems((previous) =>
-        previous.filter(
-          (item) => Number(item.id) !== Number(problem.id),
-        ),
+        previous.filter((item) => Number(item.id) !== Number(problem.id)),
       );
 
       if (Number(editingId) === Number(problem.id)) {
@@ -386,6 +396,7 @@ export default function AdminProblems() {
 
   useEffect(() => {
     const requestedId = searchParams.get("edit");
+
     if (requestedId === null || loading) return;
 
     const problemId = /^[1-9]\d*$/.test(requestedId)
@@ -410,6 +421,7 @@ export default function AdminProblems() {
   async function importCases(event) {
     const file = event.target.files?.[0];
     event.target.value = "";
+
     if (!file) return;
 
     setError("");
@@ -467,6 +479,7 @@ export default function AdminProblems() {
 
   async function saveProblem(event) {
     event.preventDefault();
+
     if (busy || loading) return;
 
     setError("");
@@ -524,10 +537,7 @@ export default function AdminProblems() {
 
   const totalProblems = problems.length;
   const totalPages = Math.max(1, Math.ceil(totalProblems / pageSize));
-  const currentProblemPage = Math.min(
-    Math.max(1, problemPage),
-    totalPages,
-  );
+  const currentProblemPage = Math.min(Math.max(1, problemPage), totalPages);
   const firstProblemIndex = (currentProblemPage - 1) * pageSize;
   const paginatedProblems = problems.slice(
     firstProblemIndex,
@@ -536,56 +546,53 @@ export default function AdminProblems() {
 
   return (
     <div ref={pageRef} className="pd-stack">
-      <div className="pd-row" ref={pageTopRef}>
-        <div>
-          <h1 className="pd-title" style={{ fontSize: "1.5rem" }}>
-            Problem Management
-          </h1>
-          <p className="pd-note">
-            Create problems, manage tests, and control publication.
-          </p>
-        </div>
+      <div ref={pageTopRef}>
+        <AdminPageHeader
+          title="Problem Management"
+          description="Create problems, manage test cases, and control publication."
+          actions={
+            <>
+              {!formOpen && hasEditor && (
+                <button
+                  type="button"
+                  onClick={resumeEditor}
+                  disabled={busy || loading}
+                  className="pd-button"
+                  aria-controls="problem-editor"
+                  aria-expanded={formOpen}
+                >
+                  {editingId
+                    ? `Resume editing #${editingId}`
+                    : "Resume form"}
+                </button>
+              )}
 
-        <div className="pd-row" style={{ gap: 10 }}>
-          {!formOpen && hasEditor && (
-            <button
-              type="button"
-              onClick={resumeEditor}
-              disabled={busy || loading}
-              className="pd-button"
-              aria-controls="problem-editor"
-              aria-expanded={formOpen}
-            >
-              {editingId
-                ? `Resume editing #${editingId}`
-                : "Resume form"}
-            </button>
-          )}
+              {formOpen && (
+                <button
+                  type="button"
+                  onClick={closeEditor}
+                  disabled={busy || loading}
+                  className="pd-button"
+                  aria-controls="problem-editor"
+                  aria-expanded={formOpen}
+                >
+                  Hide form ↑
+                </button>
+              )}
 
-          {formOpen && (
-            <button
-              type="button"
-              onClick={closeEditor}
-              disabled={busy || loading}
-              className="pd-button"
-              aria-controls="problem-editor"
-              aria-expanded={formOpen}
-            >
-              Hide form ↑
-            </button>
-          )}
-
-          <button
-            type="button"
-            onClick={startNew}
-            disabled={busy || loading}
-            className="pd-button"
-            aria-controls="problem-editor"
-            aria-expanded={formOpen}
-          >
-            Add new problem ↓
-          </button>
-        </div>
+              <button
+                type="button"
+                onClick={startNew}
+                disabled={busy || loading}
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-cyan-400/20 bg-cyan-400/10 px-4 py-3 text-sm font-semibold text-cyan-200 transition hover:bg-cyan-400/20 disabled:cursor-not-allowed disabled:opacity-40"
+                aria-controls="problem-editor"
+                aria-expanded={formOpen}
+              >
+                Add new problem
+              </button>
+            </>
+          }
+        />
       </div>
 
       {error && (
@@ -637,6 +644,7 @@ export default function AdminProblems() {
             <div className="pd-note" style={{ marginBottom: 6 }}>
               Title
             </div>
+
             <input
               name="title"
               value={form.title}
@@ -655,6 +663,7 @@ export default function AdminProblems() {
               <div className="pd-note" style={{ marginBottom: 6 }}>
                 Subject
               </div>
+
               <select
                 name="subject_id"
                 value={form.subject_id}
@@ -662,6 +671,7 @@ export default function AdminProblems() {
                 className="pd-input"
               >
                 <option value="">No subject</option>
+
                 {subjects.map((subject) => (
                   <option key={subject.id} value={subject.id}>
                     {subject.name}
@@ -674,6 +684,7 @@ export default function AdminProblems() {
               <div className="pd-note" style={{ marginBottom: 6 }}>
                 Difficulty
               </div>
+
               <select
                 name="difficulty"
                 value={form.difficulty}
@@ -690,6 +701,7 @@ export default function AdminProblems() {
               <div className="pd-note" style={{ marginBottom: 6 }}>
                 Time limit (milliseconds)
               </div>
+
               <input
                 type="number"
                 name="time_limit_ms"
@@ -707,6 +719,7 @@ export default function AdminProblems() {
               <div className="pd-note" style={{ marginBottom: 6 }}>
                 Memory limit (KB)
               </div>
+
               <input
                 type="number"
                 name="memory_limit_kb"
@@ -731,6 +744,7 @@ export default function AdminProblems() {
               <div className="pd-note" style={{ marginBottom: 6 }}>
                 {label}
               </div>
+
               <textarea
                 name={name}
                 value={form[name]}
@@ -753,6 +767,7 @@ export default function AdminProblems() {
             <div className="pd-row">
               <div>
                 <h3 className="pd-title">Test cases</h3>
+
                 <p className="pd-note" style={{ marginTop: 4 }}>
                   {sampleCount} sample · {hiddenCount} hidden
                 </p>
@@ -777,6 +792,7 @@ export default function AdminProblems() {
                   }}
                 >
                   <span>Import JSON</span>
+
                   <input
                     type="file"
                     accept=".json,application/json"
@@ -854,6 +870,7 @@ export default function AdminProblems() {
                       <div className="pd-note" style={{ marginBottom: 6 }}>
                         Input
                       </div>
+
                       <textarea
                         value={tc.input}
                         onChange={(event) =>
@@ -870,6 +887,7 @@ export default function AdminProblems() {
                       <div className="pd-note" style={{ marginBottom: 6 }}>
                         Expected output
                       </div>
+
                       <textarea
                         value={tc.expected_output}
                         onChange={(event) =>
@@ -903,6 +921,7 @@ export default function AdminProblems() {
                         updateCase(index, "is_sample", event.target.checked)
                       }
                     />
+
                     <span className="pd-note">Visible sample case</span>
                   </label>
                 </div>
@@ -932,6 +951,7 @@ export default function AdminProblems() {
                 checked={form.is_public}
                 onChange={updateField}
               />
+
               <span className="pd-note">
                 Published — visible in the public problem archive
               </span>
@@ -994,6 +1014,7 @@ export default function AdminProblems() {
             }}
           >
             Rows per page
+
             <select
               className="pd-input"
               style={{ width: 85 }}
@@ -1039,6 +1060,7 @@ export default function AdminProblems() {
 
                       <td>
                         <div>{problem.title}</div>
+
                         <div className="pd-note" style={{ marginTop: 4 }}>
                           {problem.difficulty}
                         </div>
@@ -1089,9 +1111,7 @@ export default function AdminProblems() {
                           <button
                             type="button"
                             onClick={() => deleteProblem(problem)}
-                            disabled={
-                              busy || loading || deletingId !== null
-                            }
+                            disabled={busy || loading || deletingId !== null}
                             style={{
                               background: "none",
                               border: "none",
@@ -1144,9 +1164,7 @@ export default function AdminProblems() {
                   type="button"
                   className="pd-button"
                   disabled={busy || currentProblemPage <= 1}
-                  onClick={() =>
-                    changeProblemPage(currentProblemPage - 1)
-                  }
+                  onClick={() => changeProblemPage(currentProblemPage - 1)}
                 >
                   Previous
                 </button>
@@ -1155,9 +1173,7 @@ export default function AdminProblems() {
                   type="button"
                   className="pd-button"
                   disabled={busy || currentProblemPage >= totalPages}
-                  onClick={() =>
-                    changeProblemPage(currentProblemPage + 1)
-                  }
+                  onClick={() => changeProblemPage(currentProblemPage + 1)}
                 >
                   Next
                 </button>

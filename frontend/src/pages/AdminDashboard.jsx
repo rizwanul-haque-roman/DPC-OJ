@@ -1,74 +1,136 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { RefreshCw } from "lucide-react";
 import api from "../api/axios";
+import AdminPageHeader from "../components/AdminPageHeader";
 import "../components/ProfileDashboard.css";
+
 function dayOffset(day, delta) {
   return new Date(Date.parse(day + "T00:00:00Z") + delta * 86400000)
     .toISOString()
     .slice(0, 10);
 }
+
 export default function AdminDashboard() {
-  const [data, setData] = useState(null),
-    [error, setError] = useState(""),
-    [days, setDays] = useState(7),
-    [refresh, setRefresh] = useState(0),
-    [loading, setLoading] = useState(true);
+  const [data, setData] = useState(null);
+  const [error, setError] = useState("");
+  const [days, setDays] = useState(7);
+  const [refresh, setRefresh] = useState(0);
+  const [loading, setLoading] = useState(true);
+
   useEffect(() => {
-    const c = new AbortController();
+    const controller = new AbortController();
     let timer;
+
     setLoading(true);
+
     async function load() {
       try {
         const response = await api.get("/admin/dashboard", {
-          signal: c.signal,
+          signal: controller.signal,
           params: { days },
         });
-        if (!c.signal.aborted) {
+
+        if (!controller.signal.aborted) {
           setData(response.data);
           setError("");
         }
       } catch (e) {
-        if (!c.signal.aborted)
-          setError(e.response?.data?.error || "Unable to load dashboard.");
+        if (!controller.signal.aborted) {
+          setError(
+            e.response?.data?.error || "Unable to load dashboard.",
+          );
+        }
       } finally {
-        if (!c.signal.aborted) {
+        if (!controller.signal.aborted) {
           setLoading(false);
           timer = setTimeout(load, 30000);
         }
       }
     }
+
     load();
+
     return () => {
-      c.abort();
+      controller.abort();
       clearTimeout(timer);
     };
   }, [days, refresh]);
-  if (!data)
-    return (
-      <div className="pd-panel">
-        {error ? (
-          <>
-            <p role="alert" className="pd-error">
-              {error}
-            </p>
-            <Link className="pd-link" to="/login">
-              Sign in as administrator
-            </Link>
-          </>
-        ) : (
-          <p role="status">Loading dashboard…</p>
-        )}
-        <button className="pd-button" onClick={() => setRefresh((n) => n + 1)}>
-          Retry
+
+  const pageHeader = (
+    <AdminPageHeader
+      title="Admin Dashboard"
+      description="Monitor platform activity, review submissions, manage contests, and identify items that need attention."
+      actions={
+        <button
+          type="button"
+          disabled={loading}
+          onClick={() => setRefresh((value) => value + 1)}
+          className="inline-flex items-center justify-center gap-2 rounded-xl border border-cyan-400/20 bg-cyan-400/10 px-4 py-3 text-sm font-semibold text-cyan-200 transition hover:bg-cyan-400/20 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <RefreshCw
+            size={15}
+            className={loading ? "animate-spin" : ""}
+            aria-hidden="true"
+          />
+          {loading ? "Loading…" : "Refresh"}
         </button>
+      }
+    />
+  );
+
+  if (!data) {
+    return (
+      <div className="space-y-6">
+        {pageHeader}
+
+        <section className="pd-panel">
+          {error ? (
+            <>
+              <p role="alert" className="pd-error">
+                {error}
+              </p>
+
+              <Link className="pd-link" to="/login">
+                Sign in as administrator
+              </Link>
+
+              <div style={{ marginTop: 16 }}>
+                <button
+                  type="button"
+                  className="pd-button"
+                  disabled={loading}
+                  onClick={() => setRefresh((value) => value + 1)}
+                >
+                  {loading ? "Loading…" : "Retry"}
+                </button>
+              </div>
+            </>
+          ) : (
+            <p role="status" className="pd-note">
+              Loading dashboard…
+            </p>
+          )}
+        </section>
       </div>
     );
-  const trendMap = new Map(data.trend.map((item) => [item.day, item])),
-    trend = Array.from({ length: data.days }, (_, i) => {
-      const day = dayOffset(data.today, i - data.days + 1);
-      return { day, count: Number(trendMap.get(day)?.submissions || 0) };
-    }),
-    max = Math.max(1, ...trend.map((item) => item.count));
+  }
+
+  const trendMap = new Map(
+    data.trend.map((item) => [item.day, item]),
+  );
+
+  const trend = Array.from({ length: data.days }, (_, index) => {
+    const day = dayOffset(data.today, index - data.days + 1);
+
+    return {
+      day,
+      count: Number(trendMap.get(day)?.submissions || 0),
+    };
+  });
+
+  const max = Math.max(1, ...trend.map((item) => item.count));
+
   const alerts = [
     [
       data.submissions.pending_over_five_minutes,
@@ -101,28 +163,17 @@ export default function AdminDashboard() {
       "/admin/contests",
     ],
   ];
+
   return (
-    <div className="pd-stack">
-      <div className="pd-row">
-        <p className="pd-note">
-          Operational overview · Today: {data.today} · {data.timezone}
-          <br />
-          Refreshed {new Date(data.server_time).toLocaleTimeString()} ·
-          Auto-refresh every 30 seconds
-        </p>
-        <button
-          className="pd-button"
-          disabled={loading}
-          onClick={() => setRefresh((n) => n + 1)}
-        >
-          Refresh
-        </button>
-      </div>
+    <div className="space-y-6">
+      {pageHeader}
+
       {error && (
         <p role="alert" className="pd-error">
           {error} Showing last loaded data.
         </p>
       )}
+
       <section className="pd-panel">
         <div className="pd-stats">
           {[
@@ -139,6 +190,7 @@ export default function AdminDashboard() {
             </div>
           ))}
         </div>
+
         <div className="pd-row" style={{ marginTop: 12 }}>
           {[
             ["/admin/problems", "Manage Problems"],
@@ -152,9 +204,11 @@ export default function AdminDashboard() {
           ))}
         </div>
       </section>
+
       <div className="pd-grid">
         <section className="pd-panel">
           <h2 className="pd-title">Needs attention</h2>
+
           <div style={{ marginTop: 14 }}>
             {alerts.map(([count, label, to]) => (
               <div
@@ -172,30 +226,38 @@ export default function AdminDashboard() {
                 ) : (
                   <span className="pd-note">{label}</span>
                 )}
-                <strong style={{ color: count ? "#fcd34d" : "#64748b" }}>
+
+                <strong
+                  style={{ color: count ? "#fcd34d" : "#64748b" }}
+                >
                   {count}
                 </strong>
               </div>
             ))}
           </div>
+
           <p className="pd-note" style={{ marginTop: 14 }}>
-            These are database indicators, not CPU, memory, or compiler-service
-            health checks.
+            These are database indicators, not CPU, memory, or
+            compiler-service health checks.
           </p>
         </section>
+
         <section className="pd-panel">
           <div className="pd-row">
             <h2 className="pd-title">Submission activity</h2>
+
             <select
               className="pd-input"
               style={{ width: 110 }}
               value={days}
               onChange={(e) => setDays(Number(e.target.value))}
+              aria-label="Submission activity period"
             >
               <option value={7}>7 days</option>
               <option value={30}>30 days</option>
             </select>
           </div>
+
           <div
             className="pd-chart"
             role="img"
@@ -209,15 +271,20 @@ export default function AdminDashboard() {
               >
                 <div
                   className="pd-chart-bar"
-                  style={{ height: `${(item.count / max) * 100}%` }}
+                  style={{
+                    height: `${(item.count / max) * 100}%`,
+                  }}
                 />
               </div>
             ))}
           </div>
+
           <p className="pd-note">
             {trend[0]?.day} → {data.today} ·{" "}
-            {trend.reduce((sum, item) => sum + item.count, 0)} saved submissions
+            {trend.reduce((sum, item) => sum + item.count, 0)} saved
+            submissions
           </p>
+
           <div style={{ marginTop: 18 }}>
             {data.verdicts.map((item) => (
               <div
@@ -225,13 +292,17 @@ export default function AdminDashboard() {
                 key={item.verdict}
                 style={{ padding: "4px 0", fontSize: 12 }}
               >
-                <span className="pd-muted">{item.verdict || "Unknown"}</span>
+                <span className="pd-muted">
+                  {item.verdict || "Unknown"}
+                </span>
                 <span>{item.total}</span>
               </div>
             ))}
           </div>
+
           <details className="pd-note">
             <summary>Daily submission counts</summary>
+
             {trend.map((item) => (
               <p key={item.day}>
                 {item.day}: {item.count}
@@ -240,13 +311,16 @@ export default function AdminDashboard() {
           </details>
         </section>
       </div>
+
       <section className="pd-panel">
         <div className="pd-row">
           <h2 className="pd-title">Live & upcoming contests</h2>
+
           <Link className="pd-link" to="/admin/contests">
             All contests →
           </Link>
         </div>
+
         <div className="pd-table-wrap">
           <table className="pd-table">
             <thead>
@@ -258,27 +332,40 @@ export default function AdminDashboard() {
                   "Registered",
                   "Active problems",
                   "Action",
-                ].map((x) => (
-                  <th key={x}>{x}</th>
+                ].map((heading) => (
+                  <th key={heading} scope="col">
+                    {heading}
+                  </th>
                 ))}
               </tr>
             </thead>
+
             <tbody>
               {data.contests.length ? (
-                data.contests.map((c) => (
-                  <tr key={c.id}>
-                    <td>{c.title}</td>
-                    <td>{c.status}</td>
+                data.contests.map((contest) => (
+                  <tr key={contest.id}>
+                    <td>{contest.title}</td>
+                    <td>{contest.status}</td>
+
                     <td>
-                      {new Date(c.start_time).toLocaleString()}
+                      {new Date(contest.start_time).toLocaleString()}
                       <br />
-                      {new Date(c.effective_end_time).toLocaleString()}
+                      {new Date(
+                        contest.effective_end_time,
+                      ).toLocaleString()}
                     </td>
-                    <td>{c.registered}</td>
-                    <td>{c.active_problems}</td>
+
+                    <td>{contest.registered}</td>
+                    <td>{contest.active_problems}</td>
+
                     <td>
-                      <Link to={`/admin/contests/${c.id}`}>Manage</Link> ·{" "}
-                      <Link to={`/contests/${c.id}/leaderboard`}>
+                      <Link to={`/admin/contests/${contest.id}`}>
+                        Manage
+                      </Link>{" "}
+                      ·{" "}
+                      <Link
+                        to={`/contests/${contest.id}/leaderboard`}
+                      >
                         Standings
                       </Link>
                     </td>
@@ -286,20 +373,25 @@ export default function AdminDashboard() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={6}>No live or upcoming contests.</td>
+                  <td colSpan={6}>
+                    No live or upcoming contests.
+                  </td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
       </section>
+
       <section className="pd-panel">
         <div className="pd-row">
           <h2 className="pd-title">Recent submissions</h2>
+
           <Link className="pd-link" to="/admin/submissions">
             Review all →
           </Link>
         </div>
+
         <div className="pd-table-wrap">
           <table className="pd-table">
             <thead>
@@ -311,27 +403,44 @@ export default function AdminDashboard() {
                   "Language",
                   "Verdict",
                   "Submitted",
-                ].map((x) => (
-                  <th key={x}>{x}</th>
+                ].map((heading) => (
+                  <th key={heading} scope="col">
+                    {heading}
+                  </th>
                 ))}
               </tr>
             </thead>
+
             <tbody>
               {data.recent_submissions.length ? (
-                data.recent_submissions.map((s) => (
-                  <tr key={s.id}>
+                data.recent_submissions.map((submission) => (
+                  <tr key={submission.id}>
                     <td>
-                      <Link to={`/users/${s.user_id}`}>{s.user_name}</Link>
+                      <Link to={`/users/${submission.user_id}`}>
+                        {submission.user_name}
+                      </Link>
                     </td>
+
                     <td>
-                      <Link to={`/submissions/${s.id}`}>{s.problem_title}</Link>
+                      <Link to={`/submissions/${submission.id}`}>
+                        {submission.problem_title}
+                      </Link>
                     </td>
+
                     <td>
-                      {s.contest_id ? `Contest #${s.contest_id}` : "Practice"}
+                      {submission.contest_id
+                        ? `Contest #${submission.contest_id}`
+                        : "Practice"}
                     </td>
-                    <td>{s.language}</td>
-                    <td>{s.verdict}</td>
-                    <td>{new Date(s.submitted_at).toLocaleString()}</td>
+
+                    <td>{submission.language}</td>
+                    <td>{submission.verdict}</td>
+
+                    <td>
+                      {new Date(
+                        submission.submitted_at,
+                      ).toLocaleString()}
+                    </td>
                   </tr>
                 ))
               ) : (
