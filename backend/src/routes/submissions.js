@@ -197,11 +197,6 @@ async function executeCode({ language, code, input }) {
     throw error;
   }
 
-  console.log(
-    "Compiler API response:",
-    JSON.stringify(payload, null, 2),
-  );
-
   return {
     raw: payload,
     verdict: mapCompilerResult(payload),
