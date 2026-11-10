@@ -31,9 +31,7 @@ function formatDate(value) {
 
   const date = new Date(value);
 
-  return Number.isNaN(date.getTime())
-    ? "Invalid date"
-    : date.toLocaleString();
+  return Number.isNaN(date.getTime()) ? "Invalid date" : date.toLocaleString();
 }
 
 // Preserve the selected wall-clock time for the current SQL-style API.
@@ -62,8 +60,7 @@ function AdminContests() {
   const [success, setSuccess] = useState("");
 
   const [refreshKey, setRefreshKey] = useState(0);
-  const [assignmentRefreshKey, setAssignmentRefreshKey] =
-    useState(0);
+  const [assignmentRefreshKey, setAssignmentRefreshKey] = useState(0);
 
   const isAdmin = user?.role === "admin";
   const problemActionBusy = useRef(false);
@@ -81,15 +78,14 @@ function AdminContests() {
         setLoading(true);
         setError("");
 
-        const [contestResponse, problemResponse] =
-          await Promise.all([
-            api.get("/admin/contests", {
-              signal: controller.signal,
-            }),
-            api.get("/admin/problems", {
-              signal: controller.signal,
-            }),
-          ]);
+        const [contestResponse, problemResponse] = await Promise.all([
+          api.get("/admin/contests", {
+            signal: controller.signal,
+          }),
+          api.get("/admin/problems", {
+            signal: controller.signal,
+          }),
+        ]);
 
         if (
           !Array.isArray(contestResponse.data) ||
@@ -171,27 +167,15 @@ function AdminContests() {
     return () => controller.abort();
   }, [isAdmin, selectedContestId, assignmentRefreshKey]);
 
-  useEffect(() => {
-    if (!isAdmin || !selectedContestId) return;
-    function visible() {
-      if (document.visibilityState === "visible" && !problemActionBusy.current) {
-        setAssignmentRefreshKey(value=>value+1);
-        setRefreshKey(value=>value+1);
-      }
-    }
-    document.addEventListener("visibilitychange",visible);
-    return ()=>document.removeEventListener("visibilitychange",visible);
-  },[isAdmin,selectedContestId]);
-
   const selectedContest = contests.find(
-    (contest) =>
-      String(contest.id) === String(selectedContestId),
+    (contest) => String(contest.id) === String(selectedContestId),
   );
 
   const availableProblems = problems.filter(
     (problem) =>
       !assignedProblems.some(
-        (assigned) => Number(assigned.id) === Number(problem.id) && !assigned.withdrawn_at,
+        (assigned) =>
+          Number(assigned.id) === Number(problem.id) && !assigned.withdrawn_at,
       ),
   );
 
@@ -245,14 +229,9 @@ function AdminContests() {
       setSelectedContestId(String(response.data.id));
       setRefreshKey((value) => value + 1);
 
-      setSuccess(
-        "Contest created and published. Assign problems below.",
-      );
+      setSuccess("Contest created and published. Assign problems below.");
     } catch (err) {
-      setError(
-        err.response?.data?.error ||
-          "Unable to create the contest.",
-      );
+      setError(err.response?.data?.error || "Unable to create the contest.");
     } finally {
       setBusy(false);
     }
@@ -260,47 +239,120 @@ function AdminContests() {
 
   const handleAddProblem = async (event) => {
     event.preventDefault();
-    if (!selectedContestId || !selectedProblemId || busy || problemActionBusy.current) return;
-    const problem=problems.find(item=>String(item.id)===selectedProblemId);
-    if (!problem || Number(problem.hidden_test_count)<1) { setError("Choose a problem with hidden test cases.");return; }
-    if (displayTitle.trim().length > 255) { setError("Contest problem name must be at most 255 characters."); return; }
+    if (
+      !selectedContestId ||
+      !selectedProblemId ||
+      busy ||
+      problemActionBusy.current
+    )
+      return;
+    const problem = problems.find(
+      (item) => String(item.id) === selectedProblemId,
+    );
+    if (!problem || Number(problem.hidden_test_count) < 1) {
+      setError("Choose a problem with hidden test cases.");
+      return;
+    }
+    if (displayTitle.trim().length > 255) {
+      setError("Contest problem name must be at most 255 characters.");
+      return;
+    }
     const contestProblemTitle = displayTitle.trim() || problem.title;
-    const withdrawn=assignedProblems.find(item=>Number(item.id)===Number(selectedProblemId)&&item.withdrawn_at);
-    const reason=window.prompt(withdrawn ? "Reason for restoring this problem (students will see it):" : "Reason for adding this problem (students will see it):");
-    if(reason===null)return;
-    if(!reason.trim()||reason.trim().length>1000){setError("Enter a reason between 1 and 1000 characters.");return;}
-    const impact=withdrawn ? "Its earlier eligible submissions, points, and penalties will count again. Its original letter is retained." : "Students will see this new problem. Solve time is measured from the original contest start.";
-    if(!window.confirm(`${withdrawn ? "Restore" : "Add"} ${contestProblemTitle}?\n\n${impact}\n\nReason: ${reason.trim()}`))return;
-    problemActionBusy.current=true;
-    try{
-      setBusy(true);setError("");setSuccess("");
-      const response=await api.post(`/admin/contests/${selectedContestId}/problems`,{problem_id:Number(selectedProblemId),display_title:displayTitle.trim(),expected_revision:Number(selectedContest.revision),reason:reason.trim()});
+    const withdrawn = assignedProblems.find(
+      (item) =>
+        Number(item.id) === Number(selectedProblemId) && item.withdrawn_at,
+    );
+    const reason = window.prompt(
+      withdrawn
+        ? "Reason for restoring this problem (students will see it):"
+        : "Reason for adding this problem (students will see it):",
+    );
+    if (reason === null) return;
+    if (!reason.trim() || reason.trim().length > 1000) {
+      setError("Enter a reason between 1 and 1000 characters.");
+      return;
+    }
+    const impact = withdrawn
+      ? "Its earlier eligible submissions, points, and penalties will count again. Its original letter is retained."
+      : "Students will see this new problem. Solve time is measured from the original contest start.";
+    if (
+      !window.confirm(
+        `${withdrawn ? "Restore" : "Add"} ${contestProblemTitle}?\n\n${impact}\n\nReason: ${reason.trim()}`,
+      )
+    )
+      return;
+    problemActionBusy.current = true;
+    try {
+      setBusy(true);
+      setError("");
+      setSuccess("");
+      const response = await api.post(
+        `/admin/contests/${selectedContestId}/problems`,
+        {
+          problem_id: Number(selectedProblemId),
+          display_title: displayTitle.trim(),
+          expected_revision: Number(selectedContest.revision),
+          reason: reason.trim(),
+        },
+      );
       setSelectedProblemId("");
-    setDisplayTitle("");
-      setAssignmentRefreshKey(value=>value+1);setRefreshKey(value=>value+1);
-      setSuccess(response.data.message||"Contest problem updated.");
-    }catch(err){
-      setError(err.response?.data?.error||"Unable to update this contest problem.");
-      setAssignmentRefreshKey(value=>value+1);setRefreshKey(value=>value+1);
-    }finally{problemActionBusy.current=false;setBusy(false);}
+      setDisplayTitle("");
+      setAssignmentRefreshKey((value) => value + 1);
+      setRefreshKey((value) => value + 1);
+      setSuccess(response.data.message || "Contest problem updated.");
+    } catch (err) {
+      setError(
+        err.response?.data?.error || "Unable to update this contest problem.",
+      );
+      setAssignmentRefreshKey((value) => value + 1);
+      setRefreshKey((value) => value + 1);
+    } finally {
+      problemActionBusy.current = false;
+      setBusy(false);
+    }
   };
 
   const handleRemoveProblem = async (problem) => {
-    if(busy||problemActionBusy.current||problem.withdrawn_at)return;
-    const reason=window.prompt(`Reason for withdrawing ${problem.title} (students will see it):`);
-    if(reason===null)return;
-    if(!reason.trim()||reason.trim().length>1000){setError("Enter a reason between 1 and 1000 characters.");return;}
-    if(!window.confirm(`Withdraw problem ${problem.serial_letter}: ${problem.title}?\n\nIts points, solved count, and penalty time will be excluded from everyone's standings. New submissions will be blocked. Existing submission history will be kept.\n\nReason: ${reason.trim()}`))return;
-    problemActionBusy.current=true;
-    try{
-      setBusy(true);setError("");setSuccess("");
-      const response=await api.delete(`/admin/contests/${selectedContestId}/problems/${problem.id}`,{data:{reason:reason.trim(),expected_revision:Number(selectedContest.revision)}});
-      setAssignmentRefreshKey(value=>value+1);setRefreshKey(value=>value+1);
-      setSuccess(response.data.message||"Problem withdrawn.");
-    }catch(err){
-      setError(err.response?.data?.error||"Unable to withdraw this problem.");
-      setAssignmentRefreshKey(value=>value+1);setRefreshKey(value=>value+1);
-    }finally{problemActionBusy.current=false;setBusy(false);}
+    if (busy || problemActionBusy.current || problem.withdrawn_at) return;
+    const reason = window.prompt(
+      `Reason for withdrawing ${problem.title} (students will see it):`,
+    );
+    if (reason === null) return;
+    if (!reason.trim() || reason.trim().length > 1000) {
+      setError("Enter a reason between 1 and 1000 characters.");
+      return;
+    }
+    if (
+      !window.confirm(
+        `Withdraw problem ${problem.serial_letter}: ${problem.title}?\n\nIts points, solved count, and penalty time will be excluded from everyone's standings. New submissions will be blocked. Existing submission history will be kept.\n\nReason: ${reason.trim()}`,
+      )
+    )
+      return;
+    problemActionBusy.current = true;
+    try {
+      setBusy(true);
+      setError("");
+      setSuccess("");
+      const response = await api.delete(
+        `/admin/contests/${selectedContestId}/problems/${problem.id}`,
+        {
+          data: {
+            reason: reason.trim(),
+            expected_revision: Number(selectedContest.revision),
+          },
+        },
+      );
+      setAssignmentRefreshKey((value) => value + 1);
+      setRefreshKey((value) => value + 1);
+      setSuccess(response.data.message || "Problem withdrawn.");
+    } catch (err) {
+      setError(err.response?.data?.error || "Unable to withdraw this problem.");
+      setAssignmentRefreshKey((value) => value + 1);
+      setRefreshKey((value) => value + 1);
+    } finally {
+      problemActionBusy.current = false;
+      setBusy(false);
+    }
   };
 
   if (!isAdmin) {
@@ -338,22 +390,10 @@ function AdminContests() {
             </h2>
 
             <p className="mt-2 text-sm leading-7 text-slate-400">
-              Create contests and assign existing problems from
-              the problem bank.
+              Create contests and assign existing problems from the problem
+              bank.
             </p>
           </div>
-
-          <button
-            type="button"
-            disabled={loading || busy}
-            onClick={() => {
-              setRefreshKey((value) => value + 1);
-              setAssignmentRefreshKey((value) => value + 1);
-            }}
-            className={buttonClass}
-          >
-            {loading ? "Loading..." : "Refresh"}
-          </button>
         </div>
       </section>
 
@@ -376,13 +416,11 @@ function AdminContests() {
       )}
 
       <section className={panelClass}>
-        <h3 className="text-xl font-bold text-white">
-          Create Contest
-        </h3>
+        <h3 className="text-xl font-bold text-white">Create Contest</h3>
 
         <p className="mt-2 text-sm text-slate-400">
-          This first version publishes contests immediately.
-          Add the problems after creating the contest.
+          This first version publishes contests immediately. Add the problems
+          after creating the contest.
         </p>
 
         <form onSubmit={handleCreateContest} className="mt-5">
@@ -438,10 +476,9 @@ function AdminContests() {
             </div>
 
             <p className="text-xs leading-6 text-slate-500">
-              Select local times on your Windows PC. After saving,
-              verify that the public contest page shows the same
-              times. We will standardize timezone handling before
-              enforcing contest submission windows.
+              Select local times on your Windows PC. After saving, verify that
+              the public contest page shows the same times. We will standardize
+              timezone handling before enforcing contest submission windows.
             </p>
 
             <button type="submit" className={buttonClass}>
@@ -457,8 +494,8 @@ function AdminContests() {
         </h3>
 
         <p className="mt-2 text-sm leading-7 text-slate-400">
-          Select a contest, then add existing problems. The backend
-          assigns their A/B/C letters.
+          Select a contest, then add existing problems. The backend assigns
+          their A/B/C letters.
         </p>
 
         {loading ? (
@@ -526,10 +563,7 @@ function AdminContests() {
             {selectedContestId && (
               <>
                 {assignedLoading && (
-                  <p
-                    role="status"
-                    className="mt-5 text-sm text-cyan-200"
-                  >
+                  <p role="status" className="mt-5 text-sm text-cyan-200">
                     Loading assigned problems...
                   </p>
                 )}
@@ -555,9 +589,15 @@ function AdminContests() {
                           onChange={(event) => {
                             const id = event.target.value;
                             setSelectedProblemId(id);
-                            const assigned = assignedProblems.find((item) => String(item.id) === id);
-                            const original = problems.find((item) => String(item.id) === id);
-                            setDisplayTitle(assigned?.title || original?.title || "");
+                            const assigned = assignedProblems.find(
+                              (item) => String(item.id) === id,
+                            );
+                            const original = problems.find(
+                              (item) => String(item.id) === id,
+                            );
+                            setDisplayTitle(
+                              assigned?.title || original?.title || "",
+                            );
                           }}
                           className={`mt-2 ${inputClass}`}
                         >
@@ -567,11 +607,16 @@ function AdminContests() {
                             <option
                               key={problem.id}
                               value={problem.id}
-                              disabled={
-                                Number(problem.hidden_test_count) < 1
-                              }
+                              disabled={Number(problem.hidden_test_count) < 1}
                             >
-                              #{problem.id} — {problem.title}{assignedProblems.some(item => Number(item.id) === Number(problem.id) && item.withdrawn_at) ? " — Restore withdrawn problem" : ""}
+                              #{problem.id} — {problem.title}
+                              {assignedProblems.some(
+                                (item) =>
+                                  Number(item.id) === Number(problem.id) &&
+                                  item.withdrawn_at,
+                              )
+                                ? " — Restore withdrawn problem"
+                                : ""}
                               {Number(problem.hidden_test_count) < 1
                                 ? " — needs hidden tests"
                                 : ""}
@@ -585,7 +630,9 @@ function AdminContests() {
                         <input
                           type="text"
                           value={displayTitle}
-                          onChange={(event) => setDisplayTitle(event.target.value)}
+                          onChange={(event) =>
+                            setDisplayTitle(event.target.value)
+                          }
                           maxLength={255}
                           disabled={busy || !selectedProblemId}
                           placeholder="Leave blank to use the original name"
@@ -601,24 +648,38 @@ function AdminContests() {
                         disabled={
                           busy ||
                           !selectedProblemId ||
-                          (assignedProblems.length >= 26 && !assignedProblems.some(item => String(item.id) === selectedProblemId && item.withdrawn_at))
+                          (assignedProblems.length >= 26 &&
+                            !assignedProblems.some(
+                              (item) =>
+                                String(item.id) === selectedProblemId &&
+                                item.withdrawn_at,
+                            ))
                         }
                         className={`${buttonClass} self-start`}
                       >
-                        {busy ? "Saving..." : assignedProblems.some(item => String(item.id) === selectedProblemId && item.withdrawn_at) ? "Restore Problem" : "Add Problem"}
+                        {busy
+                          ? "Saving..."
+                          : assignedProblems.some(
+                                (item) =>
+                                  String(item.id) === selectedProblemId &&
+                                  item.withdrawn_at,
+                              )
+                            ? "Restore Problem"
+                            : "Add Problem"}
                       </button>
                     </form>
 
                     {problems.length === 0 && (
                       <p className="mt-3 text-sm text-amber-200">
-                        The problem bank is empty. A problem must
-                        be created before it can be assigned.
+                        The problem bank is empty. A problem must be created
+                        before it can be assigned.
                       </p>
                     )}
 
                     <p className="mt-3 text-xs leading-6 text-slate-500">
-                      Problems without hidden tests are disabled in
-                      this picker. Withdrawn problems keep their submissions and letter, but no longer contribute to standings.
+                      Problems without hidden tests are disabled in this picker.
+                      Withdrawn problems keep their submissions and letter, but
+                      no longer contribute to standings.
                     </p>
 
                     {assignedProblems.length === 0 ? (
@@ -630,18 +691,12 @@ function AdminContests() {
                         <table className="w-full min-w-[550px] text-sm">
                           <thead className="bg-white/[0.04] text-slate-400">
                             <tr>
-                              <th className="px-4 py-3 text-left">
-                                Letter
-                              </th>
-                              <th className="px-4 py-3 text-left">
-                                Problem
-                              </th>
+                              <th className="px-4 py-3 text-left">Letter</th>
+                              <th className="px-4 py-3 text-left">Problem</th>
                               <th className="px-4 py-3 text-left">
                                 Difficulty
                               </th>
-                              <th className="px-4 py-3 text-right">
-                                Action
-                              </th>
+                              <th className="px-4 py-3 text-right">Action</th>
                             </tr>
                           </thead>
 
@@ -657,13 +712,23 @@ function AdminContests() {
 
                                 <td className="px-4 py-4 text-white">
                                   {problem.title}
-                                  {problem.original_title && problem.original_title !== problem.title && (
-                                    <p className="mt-1 text-xs text-slate-500">
-                                      Original: {problem.original_title}
+                                  {problem.original_title &&
+                                    problem.original_title !==
+                                      problem.title && (
+                                      <p className="mt-1 text-xs text-slate-500">
+                                        Original: {problem.original_title}
+                                      </p>
+                                    )}
+                                  {problem.withdrawn_at && (
+                                    <span className="ml-2 text-xs font-semibold text-amber-300">
+                                      Withdrawn — excluded from standings
+                                    </span>
+                                  )}
+                                  {problem.withdrawn_at && (
+                                    <p className="mt-1 text-xs font-normal text-slate-500">
+                                      {problem.withdrawn_reason}
                                     </p>
                                   )}
-                                  {problem.withdrawn_at && <span className="ml-2 text-xs font-semibold text-amber-300">Withdrawn — excluded from standings</span>}
-                                  {problem.withdrawn_at && <p className="mt-1 text-xs font-normal text-slate-500">{problem.withdrawn_reason}</p>}
                                 </td>
 
                                 <td className="px-4 py-4 capitalize text-slate-400">
@@ -673,13 +738,15 @@ function AdminContests() {
                                 <td className="px-4 py-4 text-right">
                                   <button
                                     type="button"
-                                    disabled={busy || Boolean(problem.withdrawn_at)}
-                                    onClick={() =>
-                                      handleRemoveProblem(problem)
+                                    disabled={
+                                      busy || Boolean(problem.withdrawn_at)
                                     }
+                                    onClick={() => handleRemoveProblem(problem)}
                                     className="rounded-xl border border-rose-400/20 bg-rose-400/10 px-3 py-2 text-xs font-semibold text-rose-200 transition hover:bg-rose-400/20 disabled:opacity-40"
                                   >
-                                    {problem.withdrawn_at ? "Withdrawn" : "Withdraw"}
+                                    {problem.withdrawn_at
+                                      ? "Withdrawn"
+                                      : "Withdraw"}
                                   </button>
                                 </td>
                               </tr>

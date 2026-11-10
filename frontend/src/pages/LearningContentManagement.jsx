@@ -6,7 +6,6 @@ import {
   ChevronRight,
   Pencil,
   Plus,
-  RefreshCw,
   Trash2,
 } from "lucide-react";
 import api from "../api/axios";
@@ -22,18 +21,14 @@ const input =
 const button =
   "inline-flex items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-40";
 
-const neutral =
-  `${button} border-white/10 bg-white/5 text-slate-300 hover:bg-white/10`;
+const neutral = `${button} border-white/10 bg-white/5 text-slate-300 hover:bg-white/10`;
 
-const primary =
-  `${button} border-cyan-400/20 bg-cyan-400/10 text-cyan-200 hover:bg-cyan-400/20`;
+const primary = `${button} border-cyan-400/20 bg-cyan-400/10 text-cyan-200 hover:bg-cyan-400/20`;
 
-const danger =
-  `${button} border-rose-400/20 bg-rose-400/10 text-rose-200 hover:bg-rose-400/20`;
+const danger = `${button} border-rose-400/20 bg-rose-400/10 text-rose-200 hover:bg-rose-400/20`;
 
 const badges = {
-  published:
-    "border-emerald-400/20 bg-emerald-400/10 text-emerald-200",
+  published: "border-emerald-400/20 bg-emerald-400/10 text-emerald-200",
   draft: "border-amber-400/20 bg-amber-400/10 text-amber-200",
   archived: "border-slate-400/20 bg-slate-400/10 text-slate-300",
 };
@@ -73,63 +68,131 @@ function isCourseAvailable(course) {
 
 function filterCourses(courses, filters) {
   const search = filters.search.trim().toLocaleLowerCase();
-  return courses.filter((course) => {
-    const matchesName = String(course.name || "").toLocaleLowerCase().includes(search) ||
-      String(course.id).includes(search);
-    return matchesName &&
-      (filters.visibility === "all" || flag(course.is_active) === (filters.visibility === "visible")) &&
-      (
-        filters.content === "all" ||
-        (filters.content === "regular" && !flag(course.is_placeholder)) ||
-        (filters.content === "placeholder" && flag(course.is_placeholder)) ||
-        (filters.content === "available" && isCourseAvailable(course)) ||
-        (filters.content === "unavailable" && !isCourseAvailable(course))
+  return courses
+    .filter((course) => {
+      const matchesName =
+        String(course.name || "")
+          .toLocaleLowerCase()
+          .includes(search) || String(course.id).includes(search);
+      return (
+        matchesName &&
+        (filters.visibility === "all" ||
+          flag(course.is_active) === (filters.visibility === "visible")) &&
+        (filters.content === "all" ||
+          (filters.content === "regular" && !flag(course.is_placeholder)) ||
+          (filters.content === "placeholder" && flag(course.is_placeholder)) ||
+          (filters.content === "available" && isCourseAvailable(course)) ||
+          (filters.content === "unavailable" && !isCourseAvailable(course)))
       );
-  }).sort((a, b) => {
-    const nameOrder = String(a.name || "").localeCompare(String(b.name || ""), undefined, { sensitivity: "base", numeric: true }) || Number(a.id) - Number(b.id);
-    if (filters.sort === "name-desc") return -nameOrder;
-    if (filters.sort === "lessons-desc") return Number(b.lesson_count || 0) - Number(a.lesson_count || 0) || nameOrder;
-    if (filters.sort === "lessons-asc") return Number(a.lesson_count || 0) - Number(b.lesson_count || 0) || nameOrder;
-    return nameOrder;
-  });
+    })
+    .sort((a, b) => {
+      const nameOrder =
+        String(a.name || "").localeCompare(String(b.name || ""), undefined, {
+          sensitivity: "base",
+          numeric: true,
+        }) || Number(a.id) - Number(b.id);
+      if (filters.sort === "name-desc") return -nameOrder;
+      if (filters.sort === "lessons-desc")
+        return (
+          Number(b.lesson_count || 0) - Number(a.lesson_count || 0) || nameOrder
+        );
+      if (filters.sort === "lessons-asc")
+        return (
+          Number(a.lesson_count || 0) - Number(b.lesson_count || 0) || nameOrder
+        );
+      return nameOrder;
+    });
 }
 
 function filterLessons(lessons, filters) {
   const search = filters.search.trim().toLocaleLowerCase();
-  return lessons.map((topic, index) => ({ topic, index })).filter(({ topic }) =>
-    (String(topic.title || "").toLocaleLowerCase().includes(search) || String(topic.id).includes(search)) &&
-    (filters.status === "all" || topic.status === filters.status),
-  ).sort((a, b) => {
-    if (filters.sort === "order") return a.index - b.index;
-    const compared = String(a.topic.title || "").localeCompare(String(b.topic.title || ""), undefined, { sensitivity: "base", numeric: true }) || Number(a.topic.id) - Number(b.topic.id);
-    return filters.sort === "name-desc" ? -compared : compared;
-  });
+  return lessons
+    .map((topic, index) => ({ topic, index }))
+    .filter(
+      ({ topic }) =>
+        (String(topic.title || "")
+          .toLocaleLowerCase()
+          .includes(search) ||
+          String(topic.id).includes(search)) &&
+        (filters.status === "all" || topic.status === filters.status),
+    )
+    .sort((a, b) => {
+      if (filters.sort === "order") return a.index - b.index;
+      const compared =
+        String(a.topic.title || "").localeCompare(
+          String(b.topic.title || ""),
+          undefined,
+          { sensitivity: "base", numeric: true },
+        ) || Number(a.topic.id) - Number(b.topic.id);
+      return filters.sort === "name-desc" ? -compared : compared;
+    });
 }
 
 function paginate(items, page, pageSize) {
   const pages = Math.max(1, Math.ceil(items.length / pageSize));
   const current = Math.max(1, Math.min(page, pages));
   const offset = (current - 1) * pageSize;
-  return { pages, current, from: items.length ? offset + 1 : 0,
-    to: Math.min(offset + pageSize, items.length), items: items.slice(offset, offset + pageSize) };
+  return {
+    pages,
+    current,
+    from: items.length ? offset + 1 : 0,
+    to: Math.min(offset + pageSize, items.length),
+    items: items.slice(offset, offset + pageSize),
+  };
 }
 
-function ListPagination({ label, data, total, pageSize, onPage, onPageSize, disabled }) {
+function ListPagination({
+  label,
+  data,
+  total,
+  pageSize,
+  onPage,
+  onPageSize,
+  disabled,
+}) {
   return (
-    <nav aria-label={`${label} pagination`} className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4">
+    <nav
+      aria-label={`${label} pagination`}
+      className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4"
+    >
       <p role="status" className="text-xs text-slate-400">
         Showing {data.from}–{data.to} of {total} matching {label.toLowerCase()}
       </p>
       <div className="flex flex-wrap items-center gap-2">
         <label className="flex items-center gap-2 text-xs text-slate-400">
           {label} per page
-          <select value={pageSize} disabled={disabled} onChange={(event) => onPageSize(Number(event.target.value))} className="rounded-lg border border-white/10 bg-slate-950 px-2 py-2 text-slate-200">
-            {[5, 10, 25, 50].map((size) => <option key={size} value={size}>{size}</option>)}
+          <select
+            value={pageSize}
+            disabled={disabled}
+            onChange={(event) => onPageSize(Number(event.target.value))}
+            className="rounded-lg border border-white/10 bg-slate-950 px-2 py-2 text-slate-200"
+          >
+            {[5, 10, 25, 50].map((size) => (
+              <option key={size} value={size}>
+                {size}
+              </option>
+            ))}
           </select>
         </label>
-        <span className="px-2 text-xs text-slate-500">Page {data.current} of {data.pages}</span>
-        <button type="button" className={neutral} disabled={disabled || data.current === 1} onClick={() => onPage(data.current - 1)}>Previous</button>
-        <button type="button" className={neutral} disabled={disabled || data.current === data.pages} onClick={() => onPage(data.current + 1)}>Next</button>
+        <span className="px-2 text-xs text-slate-500">
+          Page {data.current} of {data.pages}
+        </span>
+        <button
+          type="button"
+          className={neutral}
+          disabled={disabled || data.current === 1}
+          onClick={() => onPage(data.current - 1)}
+        >
+          Previous
+        </button>
+        <button
+          type="button"
+          className={neutral}
+          disabled={disabled || data.current === data.pages}
+          onClick={() => onPage(data.current + 1)}
+        >
+          Next
+        </button>
       </div>
     </nav>
   );
@@ -156,8 +219,17 @@ export default function LearningContentManagement() {
   const [courseFormError, setCourseFormError] = useState("");
   const [lessonEditor, setLessonEditor] = useState(null);
 
-  const [courseFilters, setCourseFilters] = useState({ search: "", visibility: "all", content: "all", sort: "name-asc" });
-  const [lessonFilters, setLessonFilters] = useState({ search: "", status: "all", sort: "order" });
+  const [courseFilters, setCourseFilters] = useState({
+    search: "",
+    visibility: "all",
+    content: "all",
+    sort: "name-asc",
+  });
+  const [lessonFilters, setLessonFilters] = useState({
+    search: "",
+    status: "all",
+    sort: "order",
+  });
   const [coursePage, setCoursePage] = useState(1);
   const [coursePageSize, setCoursePageSize] = useState(10);
   const [lessonPage, setLessonPage] = useState(1);
@@ -168,13 +240,30 @@ export default function LearningContentManagement() {
   const selectedCourseSectionRef = useRef(null);
 
   const selectedCourse = courses.find((item) => String(item.id) === courseId);
-  const filteredCourses = useMemo(() => filterCourses(courses, courseFilters), [courses, courseFilters]);
-  const filteredLessons = useMemo(() => filterLessons(lessons, lessonFilters), [lessons, lessonFilters]);
-  const coursePagination = paginate(filteredCourses, coursePage, coursePageSize);
-  const lessonPagination = paginate(filteredLessons, lessonPage, lessonPageSize);
+  const filteredCourses = useMemo(
+    () => filterCourses(courses, courseFilters),
+    [courses, courseFilters],
+  );
+  const filteredLessons = useMemo(
+    () => filterLessons(lessons, lessonFilters),
+    [lessons, lessonFilters],
+  );
+  const coursePagination = paginate(
+    filteredCourses,
+    coursePage,
+    coursePageSize,
+  );
+  const lessonPagination = paginate(
+    filteredLessons,
+    lessonPage,
+    lessonPageSize,
+  );
   const visibleCourses = coursePagination.items;
   const visibleLessons = lessonPagination.items;
-  const reorderAllowed = !lessonFilters.search.trim() && lessonFilters.status === "all" && lessonFilters.sort === "order";
+  const reorderAllowed =
+    !lessonFilters.search.trim() &&
+    lessonFilters.status === "all" &&
+    lessonFilters.sort === "order";
 
   function updateCourseFilter(field, value) {
     setCourseFilters((current) => ({ ...current, [field]: value }));
@@ -185,7 +274,12 @@ export default function LearningContentManagement() {
     setLessonPage(1);
   }
   function resetCourseFilters() {
-    setCourseFilters({ search: "", visibility: "all", content: "all", sort: "name-asc" });
+    setCourseFilters({
+      search: "",
+      visibility: "all",
+      content: "all",
+      sort: "name-asc",
+    });
     setCoursePage(1);
   }
   function resetLessonFilters() {
@@ -215,7 +309,6 @@ export default function LearningContentManagement() {
       });
     }
   }, [courseForm]);
-
 
   useEffect(() => {
     const controller = new AbortController();
@@ -333,7 +426,8 @@ export default function LearningContentManagement() {
             description: course.description || "",
             language: course.language || "",
             is_placeholder: Boolean(course.is_placeholder),
-            is_active: course.is_active === true || Number(course.is_active) === 1,
+            is_active:
+              course.is_active === true || Number(course.is_active) === 1,
             execution_mode: course.execution_mode || "disabled",
             default_language: course.default_language || "",
             editor_enabled: Boolean(course.editor_enabled),
@@ -385,10 +479,7 @@ export default function LearningContentManagement() {
       };
 
       const response = courseForm.id
-        ? await api.patch(
-            `/admin/learning/subjects/${courseForm.id}`,
-            payload,
-          )
+        ? await api.patch(`/admin/learning/subjects/${courseForm.id}`, payload)
         : await api.post("/admin/learning/subjects", payload);
 
       setCourseForm(null);
@@ -463,15 +554,12 @@ export default function LearningContentManagement() {
     }
 
     void runAction(async () => {
-      const response = await api.delete(
-        `/admin/learning/topics/${topic.id}`,
-        {
-          data: {
-            confirm: true,
-            reason: reason.trim() || undefined,
-          },
+      const response = await api.delete(`/admin/learning/topics/${topic.id}`, {
+        data: {
+          confirm: true,
+          reason: reason.trim() || undefined,
         },
-      );
+      });
 
       setSuccess(response.data.message);
       refreshWorkspace();
@@ -550,21 +638,6 @@ export default function LearningContentManagement() {
       <AdminPageHeader
         title="Learning Content Management"
         description="Manage courses directly, then create and edit lessons inside each course."
-        actions={
-          <button
-            type="button"
-            disabled={disabled}
-            onClick={refreshWorkspace}
-            className={primary}
-          >
-            <RefreshCw
-              size={15}
-              className={loading ? "animate-spin" : ""}
-              aria-hidden="true"
-            />
-            Refresh
-          </button>
-        }
       />
 
       {courseForm && (
@@ -572,7 +645,6 @@ export default function LearningContentManagement() {
           <h2 className="text-xl font-bold text-white">
             {courseForm.id ? "Edit course" : "Add course"}
           </h2>
-
 
           <form onSubmit={saveCourse} className="mt-5">
             <fieldset disabled={busy} className="space-y-4">
@@ -667,8 +739,7 @@ export default function LearningContentManagement() {
                         busy ||
                         (name === "run_enabled" &&
                           (!courseForm.values.editor_enabled ||
-                            courseForm.values.execution_mode ===
-                              "disabled"))
+                            courseForm.values.execution_mode === "disabled"))
                       }
                       className="accent-cyan-400"
                     />
@@ -678,9 +749,9 @@ export default function LearningContentManagement() {
               </div>
 
               <p className="text-xs leading-6 text-slate-500">
-                Execution settings configure the course; they do not
-                add support for a new runner. Keep Run disabled for
-                tools your backend does not support.
+                Execution settings configure the course; they do not add support
+                for a new runner. Keep Run disabled for tools your backend does
+                not support.
               </p>
 
               {courseFormError && (
@@ -715,15 +786,14 @@ export default function LearningContentManagement() {
         </section>
       )}
 
-      {(
+      {
         <section className={panel}>
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
-              <h2 className="text-xl font-bold text-white">
-                Courses
-              </h2>
+              <h2 className="text-xl font-bold text-white">Courses</h2>
               <p className="mt-1 text-sm text-slate-400">
-                {filteredCourses.length} matching courses · {courses.length} total
+                {filteredCourses.length} matching courses · {courses.length}{" "}
+                total
               </p>
             </div>
 
@@ -739,16 +809,45 @@ export default function LearningContentManagement() {
           </div>
 
           <div className="mt-5 grid gap-3 border-y border-white/10 py-4 sm:grid-cols-2 xl:grid-cols-4">
-            <label className="text-xs text-slate-400">Search courses
-              <input type="search" maxLength={100} value={courseFilters.search} onChange={(event) => updateCourseFilter("search", event.target.value)} disabled={disabled} placeholder="Course name or ID..." className={`${input} mt-2`} />
+            <label className="text-xs text-slate-400">
+              Search courses
+              <input
+                type="search"
+                maxLength={100}
+                value={courseFilters.search}
+                onChange={(event) =>
+                  updateCourseFilter("search", event.target.value)
+                }
+                disabled={disabled}
+                placeholder="Course name or ID..."
+                className={`${input} mt-2`}
+              />
             </label>
-            <label className="text-xs text-slate-400">Visibility
-              <select value={courseFilters.visibility} onChange={(event) => updateCourseFilter("visibility", event.target.value)} disabled={disabled} className={`${input} mt-2`}>
-                <option value="all">All visibility</option><option value="visible">Visible to students</option><option value="hidden">Hidden from students</option>
+            <label className="text-xs text-slate-400">
+              Visibility
+              <select
+                value={courseFilters.visibility}
+                onChange={(event) =>
+                  updateCourseFilter("visibility", event.target.value)
+                }
+                disabled={disabled}
+                className={`${input} mt-2`}
+              >
+                <option value="all">All visibility</option>
+                <option value="visible">Visible to students</option>
+                <option value="hidden">Hidden from students</option>
               </select>
             </label>
-            <label className="text-xs text-slate-400">Course type / availability
-              <select value={courseFilters.content} onChange={(event) => updateCourseFilter("content", event.target.value)} disabled={disabled} className={`${input} mt-2`}>
+            <label className="text-xs text-slate-400">
+              Course type / availability
+              <select
+                value={courseFilters.content}
+                onChange={(event) =>
+                  updateCourseFilter("content", event.target.value)
+                }
+                disabled={disabled}
+                className={`${input} mt-2`}
+              >
                 <option value="all">All courses</option>
                 <option value="regular">Non-placeholder</option>
                 <option value="placeholder">Placeholder</option>
@@ -756,15 +855,36 @@ export default function LearningContentManagement() {
                 <option value="unavailable">Unavailable to learn</option>
               </select>
             </label>
-            <label className="text-xs text-slate-400">Sort courses
-              <select value={courseFilters.sort} onChange={(event) => updateCourseFilter("sort", event.target.value)} disabled={disabled} className={`${input} mt-2`}>
-                <option value="name-asc">Name: A–Z</option><option value="name-desc">Name: Z–A</option><option value="lessons-desc">Most lessons</option><option value="lessons-asc">Fewest lessons</option>
+            <label className="text-xs text-slate-400">
+              Sort courses
+              <select
+                value={courseFilters.sort}
+                onChange={(event) =>
+                  updateCourseFilter("sort", event.target.value)
+                }
+                disabled={disabled}
+                className={`${input} mt-2`}
+              >
+                <option value="name-asc">Name: A–Z</option>
+                <option value="name-desc">Name: Z–A</option>
+                <option value="lessons-desc">Most lessons</option>
+                <option value="lessons-asc">Fewest lessons</option>
               </select>
             </label>
           </div>
           <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-            <p className="text-xs text-slate-500">Filtering courses does not close the selected course’s lesson workspace.</p>
-            <button type="button" disabled={disabled} onClick={resetCourseFilters} className={neutral}>Reset course filters</button>
+            <p className="text-xs text-slate-500">
+              Filtering courses does not close the selected course’s lesson
+              workspace.
+            </p>
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={resetCourseFilters}
+              className={neutral}
+            >
+              Reset course filters
+            </button>
           </div>
 
           {loading ? (
@@ -773,7 +893,9 @@ export default function LearningContentManagement() {
             </p>
           ) : visibleCourses.length === 0 ? (
             <p className="mt-5 rounded-2xl border border-dashed border-white/10 p-8 text-center text-sm text-slate-500">
-              {courses.length === 0 ? "No courses yet. Add the first course." : "No courses match your search and filters. Reset the course filters to see all courses."}
+              {courses.length === 0
+                ? "No courses yet. Add the first course."
+                : "No courses match your search and filters. Reset the course filters to see all courses."}
             </p>
           ) : (
             <div className="mt-5 grid gap-4 xl:grid-cols-2">
@@ -807,7 +929,9 @@ export default function LearningContentManagement() {
                               : "border-amber-400/20 bg-amber-400/10 text-amber-200"
                           }`}
                         >
-                          {isCourseAvailable(course) ? "Available to learn" : "Unavailable to learn"}
+                          {isCourseAvailable(course)
+                            ? "Available to learn"
+                            : "Unavailable to learn"}
                         </span>
 
                         {course.description && (
@@ -824,7 +948,9 @@ export default function LearningContentManagement() {
                         </p>
 
                         {!course.is_active && (
-                          <p className="mt-1 text-xs text-rose-300">Hidden from students</p>
+                          <p className="mt-1 text-xs text-rose-300">
+                            Hidden from students
+                          </p>
                         )}
                         {course.is_placeholder && (
                           <p className="mt-1 text-xs text-amber-300">
@@ -882,11 +1008,23 @@ export default function LearningContentManagement() {
             </div>
           )}
           {!loading && (
-            <ListPagination label="Courses" data={coursePagination} total={filteredCourses.length} pageSize={coursePageSize}
-              onPage={setCoursePage} onPageSize={(size) => { if ([5, 10, 25, 50].includes(size)) { setCoursePageSize(size); setCoursePage(1); } }} disabled={disabled} />
+            <ListPagination
+              label="Courses"
+              data={coursePagination}
+              total={filteredCourses.length}
+              pageSize={coursePageSize}
+              onPage={setCoursePage}
+              onPageSize={(size) => {
+                if ([5, 10, 25, 50].includes(size)) {
+                  setCoursePageSize(size);
+                  setCoursePage(1);
+                }
+              }}
+              disabled={disabled}
+            />
           )}
         </section>
-      )}
+      }
 
       {selectedCourse && (
         <section ref={selectedCourseSectionRef} className={panel}>
@@ -901,8 +1039,7 @@ export default function LearningContentManagement() {
               </h2>
 
               <p className="mt-2 text-sm text-slate-400">
-                Add lessons, edit their content, and manage the
-                learning order.
+                Add lessons, edit their content, and manage the learning order.
               </p>
             </div>
 
@@ -910,11 +1047,7 @@ export default function LearningContentManagement() {
               <button
                 type="button"
                 onClick={() => {
-                  if (
-                    window.confirm(
-                      "Close the selected course workspace?",
-                    )
-                  ) {
+                  if (window.confirm("Close the selected course workspace?")) {
                     setCourseId("");
                   }
                 }}
@@ -941,30 +1074,68 @@ export default function LearningContentManagement() {
           </div>
 
           <div className="mt-5 grid gap-3 border-y border-white/10 py-4 sm:grid-cols-3">
-            <label className="text-xs text-slate-400">Search lessons
-              <input type="search" maxLength={100} value={lessonFilters.search} onChange={(event) => updateLessonFilter("search", event.target.value)} disabled={disabled || lessonsLoading} placeholder="Lesson title or ID..." className={`${input} mt-2`} />
+            <label className="text-xs text-slate-400">
+              Search lessons
+              <input
+                type="search"
+                maxLength={100}
+                value={lessonFilters.search}
+                onChange={(event) =>
+                  updateLessonFilter("search", event.target.value)
+                }
+                disabled={disabled || lessonsLoading}
+                placeholder="Lesson title or ID..."
+                className={`${input} mt-2`}
+              />
             </label>
-            <label className="text-xs text-slate-400">Lesson status
-              <select value={lessonFilters.status} onChange={(event) => updateLessonFilter("status", event.target.value)} disabled={disabled || lessonsLoading} className={`${input} mt-2`}>
-                <option value="all">All statuses</option><option value="published">Published</option><option value="draft">Draft</option><option value="archived">Archived</option>
+            <label className="text-xs text-slate-400">
+              Lesson status
+              <select
+                value={lessonFilters.status}
+                onChange={(event) =>
+                  updateLessonFilter("status", event.target.value)
+                }
+                disabled={disabled || lessonsLoading}
+                className={`${input} mt-2`}
+              >
+                <option value="all">All statuses</option>
+                <option value="published">Published</option>
+                <option value="draft">Draft</option>
+                <option value="archived">Archived</option>
               </select>
             </label>
-            <label className="text-xs text-slate-400">Sort lessons
-              <select value={lessonFilters.sort} onChange={(event) => updateLessonFilter("sort", event.target.value)} disabled={disabled || lessonsLoading} className={`${input} mt-2`}>
-                <option value="order">Learning order</option><option value="name-asc">Title: A–Z</option><option value="name-desc">Title: Z–A</option>
+            <label className="text-xs text-slate-400">
+              Sort lessons
+              <select
+                value={lessonFilters.sort}
+                onChange={(event) =>
+                  updateLessonFilter("sort", event.target.value)
+                }
+                disabled={disabled || lessonsLoading}
+                className={`${input} mt-2`}
+              >
+                <option value="order">Learning order</option>
+                <option value="name-asc">Title: A–Z</option>
+                <option value="name-desc">Title: Z–A</option>
               </select>
             </label>
           </div>
           <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-            <p className="text-xs text-slate-500">{filteredLessons.length} matching lessons · {lessons.length} total</p>
-            <button type="button" disabled={disabled || lessonsLoading} onClick={resetLessonFilters} className={neutral}>Reset lesson filters</button>
+            <p className="text-xs text-slate-500">
+              {filteredLessons.length} matching lessons · {lessons.length} total
+            </p>
+            <button
+              type="button"
+              disabled={disabled || lessonsLoading}
+              onClick={resetLessonFilters}
+              className={neutral}
+            >
+              Reset lesson filters
+            </button>
           </div>
 
           {lessonError && (
-            <p
-              role="alert"
-              className="mt-5 text-sm text-rose-300"
-            >
+            <p role="alert" className="mt-5 text-sm text-rose-300">
               {lessonError}
             </p>
           )}
@@ -976,9 +1147,7 @@ export default function LearningContentManagement() {
           ) : lessonError ? (
             <button
               type="button"
-              onClick={() =>
-                setLessonRefresh((value) => value + 1)
-              }
+              onClick={() => setLessonRefresh((value) => value + 1)}
               className={`${neutral} mt-4`}
             >
               Retry loading lessons
@@ -988,7 +1157,9 @@ export default function LearningContentManagement() {
               This course has no lessons yet. Add its first lesson.
             </p>
           ) : filteredLessons.length === 0 ? (
-            <p className="mt-5 rounded-2xl border border-dashed border-white/10 p-6 text-sm text-slate-400">No lessons match your search and status filter.</p>
+            <p className="mt-5 rounded-2xl border border-dashed border-white/10 p-6 text-sm text-slate-400">
+              No lessons match your search and status filter.
+            </p>
           ) : (
             <div className="mt-6 overflow-x-auto rounded-2xl border border-white/10">
               <table className="w-full min-w-[900px] text-left text-sm">
@@ -1003,10 +1174,7 @@ export default function LearningContentManagement() {
                     <th scope="col" className="px-5 py-4">
                       Status
                     </th>
-                    <th
-                      scope="col"
-                      className="px-5 py-4 text-right"
-                    >
+                    <th scope="col" className="px-5 py-4 text-right">
                       Actions
                     </th>
                   </tr>
@@ -1026,7 +1194,9 @@ export default function LearningContentManagement() {
 
                           <button
                             type="button"
-                            disabled={disabled || !reorderAllowed || index === 0}
+                            disabled={
+                              disabled || !reorderAllowed || index === 0
+                            }
                             aria-label={`Move ${topic.title} up`}
                             onClick={() => moveLesson(index, -1)}
                             className={`${neutral} p-2`}
@@ -1091,9 +1261,7 @@ export default function LearningContentManagement() {
                               <button
                                 type="button"
                                 disabled={disabled}
-                                onClick={() =>
-                                  changeStatus(topic, "draft")
-                                }
+                                onClick={() => changeStatus(topic, "draft")}
                                 className={neutral}
                               >
                                 Restore
@@ -1131,9 +1299,7 @@ export default function LearningContentManagement() {
                               <button
                                 type="button"
                                 disabled={disabled}
-                                onClick={() =>
-                                  changeStatus(topic, "archived")
-                                }
+                                onClick={() => changeStatus(topic, "archived")}
                                 className={neutral}
                               >
                                 Archive
@@ -1150,17 +1316,32 @@ export default function LearningContentManagement() {
           )}
 
           {!lessonsLoading && !lessonError && (
-            <ListPagination label="Lessons" data={lessonPagination} total={filteredLessons.length} pageSize={lessonPageSize}
-              onPage={setLessonPage} onPageSize={(size) => { if ([5, 10, 25, 50].includes(size)) { setLessonPageSize(size); setLessonPage(1); } }} disabled={disabled} />
+            <ListPagination
+              label="Lessons"
+              data={lessonPagination}
+              total={filteredLessons.length}
+              pageSize={lessonPageSize}
+              onPage={setLessonPage}
+              onPageSize={(size) => {
+                if ([5, 10, 25, 50].includes(size)) {
+                  setLessonPageSize(size);
+                  setLessonPage(1);
+                }
+              }}
+              disabled={disabled}
+            />
           )}
           {!reorderAllowed && (
-            <p role="status" className="mt-3 text-xs text-amber-200">To reorder lessons, clear the lesson search, select All statuses, and sort by Learning order.</p>
+            <p role="status" className="mt-3 text-xs text-amber-200">
+              To reorder lessons, clear the lesson search, select All statuses,
+              and sort by Learning order.
+            </p>
           )}
 
           <p className="mt-4 text-xs leading-6 text-slate-500">
-            Reordering changes the learning sequence. Archived
-            lessons remain listed for administration. Restore an
-            archived lesson to draft before publishing it again.
+            Reordering changes the learning sequence. Archived lessons remain
+            listed for administration. Restore an archived lesson to draft
+            before publishing it again.
           </p>
         </section>
       )}

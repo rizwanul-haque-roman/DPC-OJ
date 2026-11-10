@@ -32,9 +32,7 @@ function AdminSubmissions() {
 
       const response = await api.get("/admin/submissions");
 
-      setSubmissions(
-        Array.isArray(response.data) ? response.data : [],
-      );
+      setSubmissions(Array.isArray(response.data) ? response.data : []);
     } catch (err) {
       setError(
         err.response?.data?.error ||
@@ -86,10 +84,7 @@ function AdminSubmissions() {
 
   const totalResults = filteredSubmissions.length;
 
-  const totalPages = Math.max(
-    1,
-    Math.ceil(totalResults / PAGE_SIZE),
-  );
+  const totalPages = Math.max(1, Math.ceil(totalResults / PAGE_SIZE));
 
   // Keep the displayed page valid if refreshing reduces the results.
   const activePage = Math.min(currentPage, totalPages);
@@ -101,16 +96,10 @@ function AdminSubmissions() {
   );
 
   const firstResult = totalResults === 0 ? 0 : startIndex + 1;
-  const lastResult = Math.min(
-    startIndex + PAGE_SIZE,
-    totalResults,
-  );
+  const lastResult = Math.min(startIndex + PAGE_SIZE, totalResults);
 
   // Display at most five numbered page buttons.
-  const firstPageButton = Math.max(
-    1,
-    Math.min(activePage - 2, totalPages - 4),
-  );
+  const firstPageButton = Math.max(1, Math.min(activePage - 2, totalPages - 4));
 
   const pageNumbers = Array.from(
     { length: Math.min(5, totalPages) },
@@ -158,9 +147,8 @@ function AdminSubmissions() {
             </h2>
 
             <p className="mt-2 text-sm leading-7 text-slate-400">
-              Review all student submissions. Opening a submission
-              displays its source code through the protected
-              admin-access route.
+              Review all student submissions. Opening a submission displays its
+              source code through the protected admin-access route.
             </p>
           </div>
 
@@ -168,7 +156,7 @@ function AdminSubmissions() {
             type="button"
             onClick={loadSubmissions}
             disabled={loading}
-            className="inline-flex shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-2.5 text-sm font-semibold text-slate-200 transition hover:bg-white/[0.1] disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-cyan-400/20 bg-cyan-400/10 px-4 py-3 text-sm font-semibold text-cyan-200 transition hover:bg-cyan-400/20 disabled:cursor-not-allowed disabled:opacity-40"
           >
             {loading ? "Refreshing..." : "Refresh"}
           </button>
@@ -203,12 +191,9 @@ function AdminSubmissions() {
 
         {/* Result count */}
         {!loading && !error && (
-          <p
-            className="mt-4 text-sm text-slate-400"
-            aria-live="polite"
-          >
-            Showing {firstResult}–{lastResult} of {totalResults}{" "}
-            submission{totalResults === 1 ? "" : "s"}
+          <p className="mt-4 text-sm text-slate-400" aria-live="polite">
+            Showing {firstResult}–{lastResult} of {totalResults} submission
+            {totalResults === 1 ? "" : "s"}
             {totalResults !== submissions.length
               ? ` (filtered from ${submissions.length} total)`
               : ""}
@@ -244,8 +229,7 @@ function AdminSubmissions() {
             </p>
 
             <p className="mt-2 text-sm text-slate-500">
-              Student submissions will appear here after code is
-              submitted.
+              Student submissions will appear here after code is submitted.
             </p>
           </div>
         )}
@@ -343,8 +327,7 @@ function AdminSubmissions() {
                       </td>
 
                       <td className="px-4 py-4 text-slate-300">
-                        {submission.problem_title ||
-                          "Unknown problem"}
+                        {submission.problem_title || "Unknown problem"}
                       </td>
 
                       <td className="px-4 py-4 font-mono text-xs text-slate-300">
@@ -371,9 +354,7 @@ function AdminSubmissions() {
 
                       <td className="px-4 py-4 text-xs text-slate-400">
                         {submission.submitted_at
-                          ? new Date(
-                              submission.submitted_at,
-                            ).toLocaleString()
+                          ? new Date(submission.submitted_at).toLocaleString()
                           : "—"}
                       </td>
 
@@ -396,12 +377,9 @@ function AdminSubmissions() {
               aria-label="Submission pagination"
               className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
             >
-              <p
-                className="text-sm text-slate-400"
-                aria-live="polite"
-              >
-                Page {activePage} of {totalPages} · {PAGE_SIZE}{" "}
-                submissions per page
+              <p className="text-sm text-slate-400" aria-live="polite">
+                Page {activePage} of {totalPages} · {PAGE_SIZE} submissions per
+                page
               </p>
 
               <div className="flex flex-wrap items-center gap-2">
@@ -416,9 +394,7 @@ function AdminSubmissions() {
 
                 <button
                   type="button"
-                  onClick={() =>
-                    setCurrentPage(Math.max(1, activePage - 1))
-                  }
+                  onClick={() => setCurrentPage(Math.max(1, activePage - 1))}
                   disabled={activePage === 1}
                   className={paginationButtonClass}
                 >
@@ -431,9 +407,7 @@ function AdminSubmissions() {
                     type="button"
                     onClick={() => setCurrentPage(page)}
                     aria-label={`Go to page ${page}`}
-                    aria-current={
-                      activePage === page ? "page" : undefined
-                    }
+                    aria-current={activePage === page ? "page" : undefined}
                     className={`min-w-10 rounded-xl border px-3 py-2 text-sm font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-400 ${
                       activePage === page
                         ? "border-cyan-400/40 bg-cyan-400/15 text-cyan-200"
@@ -447,9 +421,7 @@ function AdminSubmissions() {
                 <button
                   type="button"
                   onClick={() =>
-                    setCurrentPage(
-                      Math.min(totalPages, activePage + 1),
-                    )
+                    setCurrentPage(Math.min(totalPages, activePage + 1))
                   }
                   disabled={activePage === totalPages}
                   className={paginationButtonClass}
@@ -471,24 +443,21 @@ function AdminSubmissions() {
         )}
 
         {/* No results after filtering */}
-        {!loading &&
-          !error &&
-          submissions.length > 0 &&
-          totalResults === 0 && (
-            <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-8 text-center">
-              <p className="text-sm font-semibold text-slate-200">
-                No submissions match the current filters.
-              </p>
+        {!loading && !error && submissions.length > 0 && totalResults === 0 && (
+          <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-8 text-center">
+            <p className="text-sm font-semibold text-slate-200">
+              No submissions match the current filters.
+            </p>
 
-              <button
-                type="button"
-                onClick={clearFilters}
-                className="mt-3 text-sm font-semibold text-cyan-300 transition hover:text-cyan-200"
-              >
-                Clear filters
-              </button>
-            </div>
-          )}
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="mt-3 text-sm font-semibold text-cyan-300 transition hover:text-cyan-200"
+            >
+              Clear filters
+            </button>
+          </div>
+        )}
       </section>
     </div>
   );

@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { RefreshCw } from "lucide-react";
 import api from "../api/axios";
 import AdminPageHeader from "../components/AdminPageHeader";
 import "../components/ProfileDashboard.css";
@@ -15,7 +14,7 @@ export default function AdminDashboard() {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   const [days, setDays] = useState(7);
-  const [refresh, setRefresh] = useState(0);
+  const [retry, setRetry] = useState(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -37,9 +36,7 @@ export default function AdminDashboard() {
         }
       } catch (e) {
         if (!controller.signal.aborted) {
-          setError(
-            e.response?.data?.error || "Unable to load dashboard.",
-          );
+          setError(e.response?.data?.error || "Unable to load dashboard.");
         }
       } finally {
         if (!controller.signal.aborted) {
@@ -55,27 +52,12 @@ export default function AdminDashboard() {
       controller.abort();
       clearTimeout(timer);
     };
-  }, [days, refresh]);
+  }, [days, retry]);
 
   const pageHeader = (
     <AdminPageHeader
       title="Admin Dashboard"
       description="Monitor platform activity, review submissions, manage contests, and identify items that need attention."
-      actions={
-        <button
-          type="button"
-          disabled={loading}
-          onClick={() => setRefresh((value) => value + 1)}
-          className="inline-flex items-center justify-center gap-2 rounded-xl border border-cyan-400/20 bg-cyan-400/10 px-4 py-3 text-sm font-semibold text-cyan-200 transition hover:bg-cyan-400/20 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          <RefreshCw
-            size={15}
-            className={loading ? "animate-spin" : ""}
-            aria-hidden="true"
-          />
-          {loading ? "Loading…" : "Refresh"}
-        </button>
-      }
     />
   );
 
@@ -100,7 +82,7 @@ export default function AdminDashboard() {
                   type="button"
                   className="pd-button"
                   disabled={loading}
-                  onClick={() => setRefresh((value) => value + 1)}
+                  onClick={() => setRetry((value) => value + 1)}
                 >
                   {loading ? "Loading…" : "Retry"}
                 </button>
@@ -116,9 +98,7 @@ export default function AdminDashboard() {
     );
   }
 
-  const trendMap = new Map(
-    data.trend.map((item) => [item.day, item]),
-  );
+  const trendMap = new Map(data.trend.map((item) => [item.day, item]));
 
   const trend = Array.from({ length: data.days }, (_, index) => {
     const day = dayOffset(data.today, index - data.days + 1);
@@ -227,9 +207,7 @@ export default function AdminDashboard() {
                   <span className="pd-note">{label}</span>
                 )}
 
-                <strong
-                  style={{ color: count ? "#fcd34d" : "#64748b" }}
-                >
+                <strong style={{ color: count ? "#fcd34d" : "#64748b" }}>
                   {count}
                 </strong>
               </div>
@@ -237,8 +215,8 @@ export default function AdminDashboard() {
           </div>
 
           <p className="pd-note" style={{ marginTop: 14 }}>
-            These are database indicators, not CPU, memory, or
-            compiler-service health checks.
+            These are database indicators, not CPU, memory, or compiler-service
+            health checks.
           </p>
         </section>
 
@@ -281,8 +259,7 @@ export default function AdminDashboard() {
 
           <p className="pd-note">
             {trend[0]?.day} → {data.today} ·{" "}
-            {trend.reduce((sum, item) => sum + item.count, 0)} saved
-            submissions
+            {trend.reduce((sum, item) => sum + item.count, 0)} saved submissions
           </p>
 
           <div style={{ marginTop: 18 }}>
@@ -292,9 +269,7 @@ export default function AdminDashboard() {
                 key={item.verdict}
                 style={{ padding: "4px 0", fontSize: 12 }}
               >
-                <span className="pd-muted">
-                  {item.verdict || "Unknown"}
-                </span>
+                <span className="pd-muted">{item.verdict || "Unknown"}</span>
                 <span>{item.total}</span>
               </div>
             ))}
@@ -350,22 +325,15 @@ export default function AdminDashboard() {
                     <td>
                       {new Date(contest.start_time).toLocaleString()}
                       <br />
-                      {new Date(
-                        contest.effective_end_time,
-                      ).toLocaleString()}
+                      {new Date(contest.effective_end_time).toLocaleString()}
                     </td>
 
                     <td>{contest.registered}</td>
                     <td>{contest.active_problems}</td>
 
                     <td>
-                      <Link to={`/admin/contests/${contest.id}`}>
-                        Manage
-                      </Link>{" "}
-                      ·{" "}
-                      <Link
-                        to={`/contests/${contest.id}/leaderboard`}
-                      >
+                      <Link to={`/admin/contests/${contest.id}`}>Manage</Link> ·{" "}
+                      <Link to={`/contests/${contest.id}/leaderboard`}>
                         Standings
                       </Link>
                     </td>
@@ -373,9 +341,7 @@ export default function AdminDashboard() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={6}>
-                    No live or upcoming contests.
-                  </td>
+                  <td colSpan={6}>No live or upcoming contests.</td>
                 </tr>
               )}
             </tbody>
@@ -437,9 +403,7 @@ export default function AdminDashboard() {
                     <td>{submission.verdict}</td>
 
                     <td>
-                      {new Date(
-                        submission.submitted_at,
-                      ).toLocaleString()}
+                      {new Date(submission.submitted_at).toLocaleString()}
                     </td>
                   </tr>
                 ))
