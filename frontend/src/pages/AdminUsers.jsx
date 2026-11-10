@@ -91,8 +91,7 @@ function AdminUsers() {
       setUsers(Array.isArray(response.data) ? response.data : []);
     } catch (err) {
       setError(
-        err.response?.data?.error ||
-          "Unable to load users. Please try again.",
+        err.response?.data?.error || "Unable to load users. Please try again.",
       );
     } finally {
       setLoading(false);
@@ -114,8 +113,7 @@ function AdminUsers() {
           .toLowerCase()
           .includes(normalizedSearch);
 
-      const matchesRole =
-        roleFilter === "all" || user.role === roleFilter;
+      const matchesRole = roleFilter === "all" || user.role === roleFilter;
 
       const matchesStatus =
         statusFilter === "all" || user.status === statusFilter;
@@ -127,7 +125,7 @@ function AdminUsers() {
   const totalResults = filteredUsers.length;
   const totalPages = Math.max(1, Math.ceil(totalResults / PAGE_SIZE));
 
-  // Clamp the displayed page after refreshes or account updates.
+  // Clamp the displayed page after user-list updates.
   const activePage = Math.min(currentPage, totalPages);
   const startIndex = (activePage - 1) * PAGE_SIZE;
 
@@ -140,10 +138,7 @@ function AdminUsers() {
   const lastResult = Math.min(startIndex + PAGE_SIZE, totalResults);
 
   // Keep pagination compact by showing at most five page numbers.
-  const firstPageButton = Math.max(
-    1,
-    Math.min(activePage - 2, totalPages - 4),
-  );
+  const firstPageButton = Math.max(1, Math.min(activePage - 2, totalPages - 4));
 
   const pageNumbers = Array.from(
     { length: Math.min(5, totalPages) },
@@ -215,20 +210,15 @@ function AdminUsers() {
       setError("");
       setSuccess("");
 
-      const response = await api.patch(
-        `/admin/users/${user.id}/role`,
-        { role },
-      );
+      const response = await api.patch(`/admin/users/${user.id}/role`, {
+        role,
+      });
 
       updateUserInList(response.data.user);
 
-      setSuccess(
-        response.data.message || "User role updated successfully.",
-      );
+      setSuccess(response.data.message || "User role updated successfully.");
     } catch (err) {
-      setError(
-        err.response?.data?.error || "Unable to update user role.",
-      );
+      setError(err.response?.data?.error || "Unable to update user role.");
     } finally {
       setActionLoading("");
     }
@@ -266,41 +256,32 @@ function AdminUsers() {
       setError("");
       setSuccess("");
 
-      const response = await api.patch(
-        `/admin/users/${user.id}/status`,
-        { status, reason },
-      );
+      const response = await api.patch(`/admin/users/${user.id}/status`, {
+        status,
+        reason,
+      });
 
       updateUserInList(response.data.user);
       setSuspensionReason("");
 
-      setSuccess(
-        response.data.message || "User status updated successfully.",
-      );
+      setSuccess(response.data.message || "User status updated successfully.");
     } catch (err) {
-      setError(
-        err.response?.data?.error || "Unable to update user status.",
-      );
+      setError(err.response?.data?.error || "Unable to update user status.");
     } finally {
       setActionLoading("");
     }
   };
 
-  const isCurrentUser = (user) =>
-    Number(user.id) === Number(currentUser?.id);
+  const isCurrentUser = (user) => Number(user.id) === Number(currentUser?.id);
 
   // Statistics use all loaded users, not only the visible page.
-  const activeUsers = users.filter(
-    (user) => user.status === "active",
-  ).length;
+  const activeUsers = users.filter((user) => user.status === "active").length;
 
   const suspendedUsers = users.filter(
     (user) => user.status === "suspended",
   ).length;
 
-  const adminUsers = users.filter(
-    (user) => user.role === "admin",
-  ).length;
+  const adminUsers = users.filter((user) => user.role === "admin").length;
 
   const stats = [
     {
@@ -344,20 +325,11 @@ function AdminUsers() {
             </h2>
 
             <p className="mt-2 max-w-3xl text-sm leading-7 text-slate-400">
-              Search user accounts, inspect activity, manage roles,
-              suspend accounts, restore access, or safely soft-delete
-              accounts without deleting their submissions.
+              Search user accounts, inspect activity, manage roles, suspend
+              accounts, restore access, or safely soft-delete accounts without
+              deleting their submissions.
             </p>
           </div>
-
-          <button
-            type="button"
-            onClick={loadUsers}
-            disabled={loading || Boolean(actionLoading)}
-            className={`${buttonClass} shrink-0 py-2.5`}
-          >
-            {loading ? "Refreshing..." : "Refresh Users"}
-          </button>
         </div>
 
         <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -424,10 +396,7 @@ function AdminUsers() {
         </div>
 
         {!loading && !error && (
-          <p
-            className="mt-4 text-sm text-slate-400"
-            aria-live="polite"
-          >
+          <p className="mt-4 text-sm text-slate-400" aria-live="polite">
             Showing {firstResult}–{lastResult} of {totalResults} user
             {totalResults === 1 ? "" : "s"}
             {totalResults !== users.length
@@ -589,9 +558,7 @@ function AdminUsers() {
                                 onClick={() =>
                                   handleRoleChange(
                                     user,
-                                    user.role === "admin"
-                                      ? "student"
-                                      : "admin",
+                                    user.role === "admin" ? "student" : "admin",
                                   )
                                 }
                                 className={`${actionBaseClass} border-violet-400/20 bg-violet-400/10 text-violet-200 hover:bg-violet-400/20`}
@@ -608,15 +575,11 @@ function AdminUsers() {
                                   type="button"
                                   disabled={actionsDisabled}
                                   onClick={() =>
-                                    handleStatusChange(
-                                      user,
-                                      "suspended",
-                                    )
+                                    handleStatusChange(user, "suspended")
                                   }
                                   className={`${actionBaseClass} border-amber-400/20 bg-amber-400/10 text-amber-200 hover:bg-amber-400/20`}
                                 >
-                                  {actionLoading ===
-                                  `status-${user.id}`
+                                  {actionLoading === `status-${user.id}`
                                     ? "Saving..."
                                     : "Suspend"}
                                 </button>
@@ -632,8 +595,7 @@ function AdminUsers() {
                                   }
                                   className={`${actionBaseClass} border-emerald-400/20 bg-emerald-400/10 text-emerald-200 hover:bg-emerald-400/20`}
                                 >
-                                  {actionLoading ===
-                                  `status-${user.id}`
+                                  {actionLoading === `status-${user.id}`
                                     ? "Saving..."
                                     : "Restore"}
                                 </button>
@@ -666,12 +628,8 @@ function AdminUsers() {
               aria-label="User pagination"
               className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
             >
-              <p
-                className="text-sm text-slate-400"
-                aria-live="polite"
-              >
-                Page {activePage} of {totalPages} · {PAGE_SIZE} users
-                per page
+              <p className="text-sm text-slate-400" aria-live="polite">
+                Page {activePage} of {totalPages} · {PAGE_SIZE} users per page
               </p>
 
               <div className="flex flex-wrap items-center gap-2">
@@ -686,9 +644,7 @@ function AdminUsers() {
 
                 <button
                   type="button"
-                  onClick={() =>
-                    setCurrentPage(Math.max(1, activePage - 1))
-                  }
+                  onClick={() => setCurrentPage(Math.max(1, activePage - 1))}
                   disabled={activePage === 1}
                   className={buttonClass}
                 >
@@ -701,9 +657,7 @@ function AdminUsers() {
                     type="button"
                     onClick={() => setCurrentPage(page)}
                     aria-label={`Go to page ${page}`}
-                    aria-current={
-                      activePage === page ? "page" : undefined
-                    }
+                    aria-current={activePage === page ? "page" : undefined}
                     className={`min-w-10 rounded-xl border px-3 py-2 text-sm font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-400 ${
                       activePage === page
                         ? "border-cyan-400/40 bg-cyan-400/15 text-cyan-200"
@@ -717,9 +671,7 @@ function AdminUsers() {
                 <button
                   type="button"
                   onClick={() =>
-                    setCurrentPage(
-                      Math.min(totalPages, activePage + 1),
-                    )
+                    setCurrentPage(Math.min(totalPages, activePage + 1))
                   }
                   disabled={activePage === totalPages}
                   className={buttonClass}
@@ -740,24 +692,21 @@ function AdminUsers() {
           </>
         )}
 
-        {!loading &&
-          !error &&
-          users.length > 0 &&
-          totalResults === 0 && (
-            <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-8 text-center">
-              <p className="text-sm font-semibold text-slate-200">
-                No users match the selected filters.
-              </p>
+        {!loading && !error && users.length > 0 && totalResults === 0 && (
+          <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-8 text-center">
+            <p className="text-sm font-semibold text-slate-200">
+              No users match the selected filters.
+            </p>
 
-              <button
-                type="button"
-                onClick={clearFilters}
-                className="mt-3 text-sm font-semibold text-cyan-300 transition hover:text-cyan-200"
-              >
-                Clear filters
-              </button>
-            </div>
-          )}
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="mt-3 text-sm font-semibold text-cyan-300 transition hover:text-cyan-200"
+            >
+              Clear filters
+            </button>
+          </div>
+        )}
       </section>
 
       {/* User details */}
@@ -856,13 +805,11 @@ function AdminUsers() {
 
                   <p className="mt-2 break-words text-sm text-amber-100">
                     Reason:{" "}
-                    {selectedUser.suspended_reason ||
-                      "No reason was recorded."}
+                    {selectedUser.suspended_reason || "No reason was recorded."}
                   </p>
 
                   <p className="mt-2 text-xs text-amber-200/70">
-                    Suspended at:{" "}
-                    {formatDate(selectedUser.suspended_at)}
+                    Suspended at: {formatDate(selectedUser.suspended_at)}
                   </p>
                 </div>
               )}
