@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { RefreshCw } from "lucide-react";
 import api from "../api/axios";
 import AdminPageHeader from "../components/AdminPageHeader";
 import "../components/ProfileDashboard.css";
@@ -112,7 +111,6 @@ export default function AdminAuditLogs() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [refresh, setRefresh] = useState(0);
 
   const [selectedId, setSelectedId] = useState(null);
   const [event, setEvent] = useState(null);
@@ -161,7 +159,7 @@ export default function AdminAuditLogs() {
     load();
 
     return () => controller.abort();
-  }, [query, refresh]);
+  }, [query]);
 
   useEffect(() => {
     if (selectedId === null) return;
@@ -174,10 +172,9 @@ export default function AdminAuditLogs() {
 
     async function load() {
       try {
-        const response = await api.get(
-          `/admin/audit-logs/${selectedId}`,
-          { signal: controller.signal },
-        );
+        const response = await api.get(`/admin/audit-logs/${selectedId}`, {
+          signal: controller.signal,
+        });
 
         if (!controller.signal.aborted) {
           setEvent(response.data);
@@ -252,9 +249,7 @@ export default function AdminAuditLogs() {
         params.to &&
         Date.parse(params.from) > Date.parse(params.to)
       ) {
-        throw new Error(
-          "The start date must not be later than the end date.",
-        );
+        throw new Error("The start date must not be later than the end date.");
       }
 
       setSelectedId(null);
@@ -303,21 +298,6 @@ export default function AdminAuditLogs() {
       <AdminPageHeader
         title="Administrative Audit Logs"
         description="Search administrative actions and inspect recorded changes. Historical events cannot be edited or deleted through this page."
-        actions={
-          <button
-            type="button"
-            disabled={loading}
-            onClick={() => setRefresh((value) => value + 1)}
-            className="inline-flex items-center justify-center gap-2 rounded-xl border border-cyan-400/20 bg-cyan-400/10 px-4 py-3 text-sm font-semibold text-cyan-200 transition hover:bg-cyan-400/20 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            <RefreshCw
-              size={15}
-              className={loading ? "animate-spin" : ""}
-              aria-hidden="true"
-            />
-            {loading ? "Loading…" : "Refresh"}
-          </button>
-        }
       />
 
       <form className="pd-panel" onSubmit={applyFilters}>
@@ -359,14 +339,10 @@ export default function AdminAuditLogs() {
               <option value="">All categories</option>
               <option value="user_management">User management</option>
               <option value="problem_management">Problem management</option>
-              <option value="test_case_management">
-                Test-case management
-              </option>
+              <option value="test_case_management">Test-case management</option>
               <option value="contest_management">Contest management</option>
               <option value="security">Security</option>
-              <option value="uncategorized">
-                Uncategorized / historical
-              </option>
+              <option value="uncategorized">Uncategorized / historical</option>
             </select>
           </FilterField>
 
@@ -472,11 +448,7 @@ export default function AdminAuditLogs() {
           className="pd-row"
           style={{ marginTop: 18, justifyContent: "flex-start" }}
         >
-          <button
-            type="submit"
-            className="pd-button"
-            disabled={loading}
-          >
+          <button type="submit" className="pd-button" disabled={loading}>
             Apply filters
           </button>
 
@@ -547,9 +519,7 @@ export default function AdminAuditLogs() {
                 </tr>
               ) : rows.length === 0 ? (
                 <tr>
-                  <td colSpan={9}>
-                    No events match the active filters.
-                  </td>
+                  <td colSpan={9}>No events match the active filters.</td>
                 </tr>
               ) : (
                 rows.map((item) => (
@@ -581,9 +551,7 @@ export default function AdminAuditLogs() {
                         {readable(item.action)}
                       </div>
 
-                      <div className="pd-note">
-                        {readable(item.category)}
-                      </div>
+                      <div className="pd-note">{readable(item.category)}</div>
                     </td>
 
                     <td>{item.target_type || "Not recorded"}</td>
@@ -624,9 +592,8 @@ export default function AdminAuditLogs() {
         {pagination && (
           <div className="pd-row" style={{ marginTop: 18 }}>
             <p className="pd-note">
-              Showing {pagination.from}–{pagination.to} of{" "}
-              {pagination.total} · Page {pagination.page} of{" "}
-              {pagination.total_pages}
+              Showing {pagination.from}–{pagination.to} of {pagination.total} ·
+              Page {pagination.page} of {pagination.total_pages}
             </p>
 
             <div className="flex gap-2">
@@ -647,9 +614,7 @@ export default function AdminAuditLogs() {
               <button
                 type="button"
                 className="pd-button"
-                disabled={
-                  loading || pagination.page >= pagination.total_pages
-                }
+                disabled={loading || pagination.page >= pagination.total_pages}
                 onClick={() =>
                   setQuery((previous) => ({
                     ...previous,
@@ -724,9 +689,7 @@ export default function AdminAuditLogs() {
                         overflowWrap: "anywhere",
                       }}
                     >
-                      {value === null ||
-                      value === undefined ||
-                      value === ""
+                      {value === null || value === undefined || value === ""
                         ? "Not recorded"
                         : String(value)}
                     </dd>
@@ -750,9 +713,9 @@ export default function AdminAuditLogs() {
               </div>
 
               <p className="pd-note">
-                Missing historical identity snapshots may fall back to
-                the current account identity. Missing metadata is
-                displayed as “Not recorded.”
+                Missing historical identity snapshots may fall back to the
+                current account identity. Missing metadata is displayed as “Not
+                recorded.”
               </p>
             </>
           )}
