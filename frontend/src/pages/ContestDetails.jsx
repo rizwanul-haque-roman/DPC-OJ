@@ -626,7 +626,7 @@ function ContestDetails() {
                         scope="col"
                         className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400"
                       >
-                        Your status
+                        status
                       </th>
                       <th
                         scope="col"
