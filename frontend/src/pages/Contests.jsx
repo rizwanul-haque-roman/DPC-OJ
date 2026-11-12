@@ -2,13 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../api/axios";
 
-const FILTERS = [
-  { value: "all", label: "All Contests" },
-  { value: "live", label: "Live" },
-  { value: "upcoming", label: "Upcoming" },
-  { value: "ended", label: "Finished" },
-];
-
 const ROW_COLUMNS = "xl:grid-cols-[minmax(0,1fr)_150px_180px_130px_120px]";
 
 function getStatus(contest, now) {
@@ -343,29 +336,40 @@ export default function Contests() {
           <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {[
               {
+                filter: "all",
                 label: "Total Contests",
                 value: counts.all,
                 color: "text-white",
               },
               {
+                filter: "live",
                 label: "Live Now",
                 value: counts.live,
                 color: "text-emerald-300",
               },
               {
+                filter: "upcoming",
                 label: "Upcoming",
                 value: counts.upcoming,
                 color: "text-cyan-300",
               },
               {
+                filter: "ended",
                 label: "Finished",
                 value: counts.ended,
                 color: "text-rose-300",
               },
             ].map((stat) => (
-              <div
+              <button
                 key={stat.label}
-                className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"
+                type="button"
+                onClick={() => setStatusFilter(stat.filter)}
+                aria-pressed={statusFilter === stat.filter}
+                className={`rounded-2xl border p-4 text-left transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300 ${
+                  statusFilter === stat.filter
+                    ? "border-cyan-400/40 bg-cyan-400/10"
+                    : "border-white/10 bg-white/[0.03] hover:border-white/20 hover:bg-white/[0.06]"
+                }`}
               >
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                   {stat.label}
@@ -373,36 +377,20 @@ export default function Contests() {
                 <p className={`mt-2 text-3xl font-bold ${stat.color}`}>
                   {stat.value}
                 </p>
-              </div>
+              </button>
             ))}
           </div>
         )}
       </section>
 
       <section className="rounded-3xl border border-white/10 bg-slate-900/50 p-6 shadow-2xl backdrop-blur-xl">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-          <div
-            role="group"
-            aria-label="Filter contests by status"
-            className="flex flex-wrap gap-2"
-          >
-            {FILTERS.map((filter) => (
-              <button
-                key={filter.value}
-                type="button"
-                onClick={() => setStatusFilter(filter.value)}
-                aria-pressed={statusFilter === filter.value}
-                className={`rounded-xl border px-4 py-2.5 text-sm font-semibold transition ${
-                  statusFilter === filter.value
-                    ? "border-cyan-400/30 bg-cyan-400/10 text-cyan-200"
-                    : "border-white/10 bg-white/[0.03] text-slate-400 hover:bg-white/[0.07] hover:text-white"
-                }`}
-              >
-                {filter.label}
-              </button>
-            ))}
-          </div>
-
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          {!loading && !error && contests.length > 0 && (
+            <p className="text-sm text-slate-400">
+              Showing {filteredContests.length} of {contests.length} contest
+              {contests.length === 1 ? "" : "s"}.
+            </p>
+          )}
           <input
             type="search"
             aria-label="Search contests"
@@ -459,7 +447,7 @@ export default function Contests() {
                 No matching contests
               </h3>
               <p className="mt-2 text-sm text-slate-400">
-                Try a different search or status filter.
+                Try a different search or select another status card.
               </p>
               <button
                 type="button"
@@ -473,11 +461,6 @@ export default function Contests() {
 
         {!loading && !error && filteredContests.length > 0 && (
           <>
-            <p className="mt-5 text-sm text-slate-400">
-              Showing {filteredContests.length} of {contests.length} contest
-              {contests.length === 1 ? "" : "s"}.
-            </p>
-
             <div
               aria-hidden="true"
               className={`mt-5 hidden items-center gap-4 px-5 text-xs font-semibold uppercase tracking-wide text-slate-500 xl:grid ${ROW_COLUMNS}`}
