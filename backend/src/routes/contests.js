@@ -170,7 +170,7 @@ router.get(
         `
           SELECT
             p.id,
-            COALESCE(NULLIF(TRIM(cp.display_title), ''), p.title) AS title,
+            p.title,
             p.statement,
             p.input_format,
             p.output_format,
@@ -349,7 +349,7 @@ router.get("/:id/leaderboard", async (req, res) => {
       `
       SELECT
         p.id AS problem_id,
-        COALESCE(NULLIF(TRIM(cp.display_title), ''), p.title) AS title,
+        p.title,
         cp.serial_letter
       FROM contest_problems AS cp
       INNER JOIN problems AS p
@@ -557,6 +557,68 @@ router.get("/:id/leaderboard", async (req, res) => {
   }
 });
 
+// Personal progress is private and scoped to the authenticated participant.
+router.get("/:id/my-progress", requireAuth, async (req, res) => {
+  const contestId = parsePositiveId(req.params.id);
+  if (contestId === null) {
+    return res.status(400).json({ error: "Invalid contest ID." });
+  }
+  res.set("Cache-Control", "private, no-store");
+  try {
+    const contest = await findPublicContest(contestId);
+    if (!contest) {
+      return res.status(404).json({ error: "Contest not found." });
+    }
+    if (!(await isRegistered(contestId, req.user.userId))) {
+      return res.status(403).json({ error: "Register to view your contest progress." });
+    }
+    const [rows] = await db.execute(
+      `SELECT
+         cp.problem_id,
+         MAX(CASE WHEN s.verdict = 'Accepted' THEN 1 ELSE 0 END) AS solved,
+         MAX(CASE WHEN s.verdict IN (
+           'Wrong Answer', 'Time Limit Exceeded', 'Runtime Error',
+           'Compilation Error', 'Memory Limit Exceeded', 'Output Limit Exceeded'
+         ) THEN 1 ELSE 0 END) AS failed,
+         SUBSTRING_INDEX(
+           GROUP_CONCAT(
+             CASE WHEN s.verdict IN (
+               'Wrong Answer', 'Time Limit Exceeded', 'Runtime Error',
+               'Compilation Error', 'Memory Limit Exceeded', 'Output Limit Exceeded'
+             ) THEN s.verdict ELSE NULL END
+             ORDER BY s.submitted_at DESC, s.id DESC SEPARATOR '|'
+           ), '|', 1
+         ) AS latest_failed_verdict
+       FROM contest_problems AS cp
+       INNER JOIN contests AS c ON c.id = cp.contest_id
+       LEFT JOIN submissions AS s
+         ON s.contest_id = cp.contest_id
+         AND s.problem_id = cp.problem_id
+         AND s.user_id = ?
+         AND s.submitted_at >= c.start_time
+         AND s.submitted_at < COALESCE(c.ended_at, c.end_time)
+       WHERE cp.contest_id = ? AND cp.withdrawn_at IS NULL
+       GROUP BY cp.problem_id`,
+      [req.user.userId, contestId],
+    );
+    return res.json({
+      contest_id: contestId,
+      problems: rows.map((row) => {
+        const solved = Number(row.solved) === 1;
+        const failed = Number(row.failed) === 1;
+        return {
+          problem_id: Number(row.problem_id),
+          status: solved ? "solved" : failed ? "failed" : "unattempted",
+          verdict: solved ? "Accepted" : failed ? row.latest_failed_verdict : null,
+        };
+      }),
+    });
+  } catch (err) {
+    console.error("Contest personal progress error:", err);
+    return res.status(500).json({ error: "Unable to load your contest progress." });
+  }
+});
+
 // Public contest information and assigned-problem metadata.
 // Does not return problem statements or hidden test cases.
 router.get("/:id", async (req, res) => {
@@ -579,20 +641,16 @@ router.get("/:id", async (req, res) => {
 
     const [problems] = await db.execute(
       `
-      SELECT
-        cp.serial_letter,
-        p.id,
-        COALESCE(
-          NULLIF(TRIM(cp.display_title), ''),
-          p.title
-        ) AS title,
-        cp.display_title,
-        p.difficulty
-      FROM contest_problems AS cp
-      INNER JOIN problems AS p
-        ON cp.problem_id = p.id
-      WHERE cp.contest_id = ? AND cp.withdrawn_at IS NULL
-      ORDER BY cp.serial_letter ASC
+        SELECT
+          cp.serial_letter,
+          p.id,
+          p.title,
+          p.difficulty
+        FROM contest_problems AS cp
+        INNER JOIN problems AS p
+          ON cp.problem_id = p.id
+        WHERE cp.contest_id = ? AND cp.withdrawn_at IS NULL
+        ORDER BY cp.serial_letter ASC
       `,
       [contestId],
     );

@@ -87,10 +87,32 @@ const STATUS_LABELS = {
   invalid: "Schedule unavailable",
 };
 
+const VERDICT_SHORT_NAMES = {
+  Accepted: "AC",
+  "Wrong Answer": "WA",
+  "Time Limit Exceeded": "TLE",
+  "Runtime Error": "RE",
+  "Compilation Error": "CE",
+  "Memory Limit Exceeded": "MLE",
+  "Output Limit Exceeded": "OLE",
+  "Presentation Error": "PE",
+  "Internal Error": "IE",
+  Pending: "Pending",
+  Judging: "Judging",
+};
+
+function shortVerdict(verdict) {
+  return VERDICT_SHORT_NAMES[verdict] || verdict || "—";
+}
+
 function ContestDetails() {
   const { id } = useParams();
 
   const [refreshKey, setRefreshKey] = useState(0);
+  const [authToken, setAuthToken] = useState(() => localStorage.getItem("token") || "");
+  const [personalProgress, setPersonalProgress] = useState(null);
+  const [progressLoading, setProgressLoading] = useState(false);
+  const [progressError, setProgressError] = useState("");
   const { contest, loading, error, notFound, warning, now } = usePublicContest(id, refreshKey);
 
   const [hasToken, setHasToken] = useState(() =>
@@ -107,7 +129,20 @@ function ContestDetails() {
 
 
   useEffect(() => {
-    setHasToken(Boolean(localStorage.getItem("token")));
+    const syncAuth = () => {
+      const token = localStorage.getItem("token") || "";
+      setAuthToken(token);
+      setHasToken(Boolean(token));
+    };
+    syncAuth();
+    window.addEventListener("authChanged", syncAuth);
+    window.addEventListener("storage", syncAuth);
+    window.addEventListener("focus", syncAuth);
+    return () => {
+      window.removeEventListener("authChanged", syncAuth);
+      window.removeEventListener("storage", syncAuth);
+      window.removeEventListener("focus", syncAuth);
+    };
   }, [refreshKey]);
 
   useEffect(() => {
@@ -164,7 +199,7 @@ function ContestDetails() {
     loadRegistrationStatus();
 
     return () => controller.abort();
-  }, [id, hasToken, refreshKey]);
+  }, [id, hasToken, authToken, refreshKey]);
 
 
 
@@ -216,6 +251,73 @@ function ContestDetails() {
   };
 
   const status = contest ? getStatus(contest, now) : null;
+  const progressContext = `${id}:${authToken}`;
+  const currentProgress = hasToken && registered && personalProgress?.context === progressContext
+    ? personalProgress
+    : null;
+  const problemProgress = currentProgress?.problems || {};
+
+  useEffect(() => {
+    const contestId = Number(id);
+    const controller = new AbortController();
+    let inFlight = false;
+    let active = true;
+    setPersonalProgress(null);
+    setProgressError("");
+    setProgressLoading(false);
+
+    if (!hasToken || !registered || !Number.isSafeInteger(contestId) || contestId <= 0) {
+      return () => { active = false; controller.abort(); };
+    }
+
+    async function loadProgress() {
+      if (!active || inFlight) return;
+      inFlight = true;
+      setProgressLoading(true);
+      try {
+        const response = await api.get(`/contests/${contestId}/my-progress`, {
+          signal: controller.signal,
+        });
+        if (!active) return;
+        if (Number(response.data?.contest_id) !== contestId || !Array.isArray(response.data?.problems)) {
+          throw new Error("Unexpected contest progress response.");
+        }
+        setPersonalProgress({
+          context: `${id}:${authToken}`,
+          problems: Object.fromEntries(response.data.problems.map((item) => [String(item.problem_id), item.status])),
+          verdicts: Object.fromEntries(response.data.problems.map((item) => [String(item.problem_id), item.verdict])),
+        });
+        setProgressError("");
+      } catch (err) {
+        if (!active || controller.signal.aborted) return;
+        setPersonalProgress(null);
+        if (err.response?.status === 401) {
+          setHasToken(false);
+        } else {
+          setProgressError(err.response?.data?.error || "Your problem status could not be loaded. Use Refresh to try again.");
+        }
+      } finally {
+        if (active) {
+          inFlight = false;
+          setProgressLoading(false);
+        }
+      }
+    }
+
+    loadProgress();
+    const interval = status === "live" ? window.setInterval(loadProgress, 15000) : null;
+    window.addEventListener("focus", loadProgress);
+    const onVisibility = () => { if (!document.hidden) loadProgress(); };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      active = false;
+      controller.abort();
+      if (interval !== null) window.clearInterval(interval);
+      window.removeEventListener("focus", loadProgress);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [id, hasToken, authToken, registered, refreshKey, status]);
+
 
   const countdownTarget =
     status === "upcoming"
@@ -481,6 +583,20 @@ function ContestDetails() {
               the standings.
             </p>
 
+            {hasToken && registered && (
+              <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-xs" aria-label="Your problem status legend">
+                <span className="text-emerald-300">Green: AC (Accepted)</span>
+                <span className="text-rose-300">Red: Latest failed verdict</span>
+                <span className="text-slate-400">Default: Unattempted</span>
+              </div>
+            )}
+            {hasToken && registered && progressLoading && !currentProgress && (
+              <p role="status" className="mt-3 text-xs text-slate-400">Loading your problem status...</p>
+            )}
+            {hasToken && registered && progressError && (
+              <p role="alert" className="mt-3 text-xs text-amber-200">{progressError} Row colors are unavailable.</p>
+            )}
+
             {problems.length === 0 ? (
               <div className="mt-5 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-8 text-center">
                 <p className="text-sm font-semibold text-slate-200">
@@ -510,6 +626,12 @@ function ContestDetails() {
                         scope="col"
                         className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400"
                       >
+                        Your status
+                      </th>
+                      <th
+                        scope="col"
+                        className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400"
+                      >
                         Difficulty
                       </th>
                       <th
@@ -525,7 +647,13 @@ function ContestDetails() {
                     {problems.map((problem) => (
                       <tr
                         key={problem.id}
-                        className="border-b border-white/5 transition hover:bg-white/[0.03]"
+                        className={`border-b transition ${
+                          problemProgress[String(problem.id)] === "solved"
+                            ? "border-emerald-400/15 bg-emerald-400/10 hover:bg-emerald-400/15"
+                            : problemProgress[String(problem.id)] === "failed"
+                              ? "border-rose-400/15 bg-rose-400/10 hover:bg-rose-400/15"
+                              : "border-white/5 hover:bg-white/[0.03]"
+                        }`}
                       >
                         <td className="px-4 py-4">
                           <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-cyan-400/20 bg-cyan-400/10 font-mono font-bold text-cyan-200">
@@ -548,6 +676,28 @@ function ContestDetails() {
                           )}
                         </td>
 
+                        <td className="px-4 py-4">
+                          {problemProgress[String(problem.id)] === "solved" ? (
+                            <span
+                              title="Accepted"
+                              aria-label="Accepted"
+                              className="inline-flex rounded-lg border border-emerald-400/25 bg-emerald-400/10 px-2.5 py-1 text-xs font-semibold text-emerald-200"
+                            >
+                              AC
+                            </span>
+                          ) : problemProgress[String(problem.id)] === "failed" ? (
+                            <span
+                              title={currentProgress?.verdicts?.[String(problem.id)] || "Verdict unavailable"}
+                              aria-label={currentProgress?.verdicts?.[String(problem.id)] || "Verdict unavailable"}
+                              className="inline-flex rounded-lg border border-rose-400/25 bg-rose-400/10 px-2.5 py-1 text-xs font-semibold text-rose-200"
+                            >
+                              {shortVerdict(currentProgress?.verdicts?.[String(problem.id)])}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-slate-500">{hasToken && registered ? (currentProgress ? "Unattempted" : "Status unavailable") : "—"}</span>
+                          )}
+                        </td>
+
                         <td className="px-4 py-4 capitalize text-slate-300">
                           {problem.difficulty || "Not specified"}
                         </td>
@@ -557,7 +707,9 @@ function ContestDetails() {
                               to={`/problems/${problem.id}?contest_id=${contest.id}`}
                               className="inline-flex rounded-xl border border-cyan-400/20 bg-cyan-400/10 px-3 py-2 text-xs font-semibold text-cyan-200 transition hover:bg-cyan-400/20"
                             >
-                              Solve
+                              {problemProgress[String(problem.id)] === "solved"
+                                ? "Solved"
+                                : "Solve"}
                             </Link>
                           ) : (
                             <span className="text-xs text-slate-500">
